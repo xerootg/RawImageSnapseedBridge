@@ -360,29 +360,59 @@ class GalleryFragment : Fragment() {
     }
 
     private fun showClearFolderConfirmation() {
-        // Count files directly from filesystem
+        // Count files based on current filter
         val picturesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
         val raw2dngDir = File(picturesDir, "Raw2DNG")
-        val fileCount = raw2dngDir.listFiles()?.filter { 
-            it.isFile && it.extension.lowercase() == "dng" 
-        }?.size ?: 0
+        val jpegDir = File(raw2dngDir, "JPEG")
+        
+        val (fileCount, emptyMessage, confirmMessage, title) = when (currentFilter) {
+            GalleryFilter.DNG_ONLY -> {
+                val count = raw2dngDir.listFiles()?.filter { 
+                    it.isFile && it.extension.lowercase() == "dng" 
+                }?.size ?: 0
+                Quad(count, R.string.folder_empty_dng, R.string.clear_folder_confirm_dng, "Clear DNG Files")
+            }
+            GalleryFilter.JPEG_ONLY -> {
+                val count = jpegDir.listFiles()?.filter { 
+                    it.isFile && it.extension.lowercase() in listOf("jpg", "jpeg") 
+                }?.size ?: 0
+                Quad(count, R.string.folder_empty_jpeg, R.string.clear_folder_confirm_jpeg, "Clear JPEG Files")
+            }
+            GalleryFilter.ALL -> {
+                val dngCount = raw2dngDir.listFiles()?.filter { 
+                    it.isFile && it.extension.lowercase() == "dng" 
+                }?.size ?: 0
+                val jpegCount = jpegDir.listFiles()?.filter { 
+                    it.isFile && it.extension.lowercase() in listOf("jpg", "jpeg") 
+                }?.size ?: 0
+                Quad(dngCount + jpegCount, R.string.folder_empty, R.string.clear_folder_confirm, "Clear All Files")
+            }
+        }
 
         if (fileCount == 0) {
-            Toast.makeText(requireContext(), getString(R.string.folder_empty), Toast.LENGTH_SHORT).show()
+            Toast.makeText(requireContext(), getString(emptyMessage), Toast.LENGTH_SHORT).show()
             return
         }
 
         androidx.appcompat.app.AlertDialog.Builder(requireContext())
-            .setTitle("Clear Folder")
-            .setMessage(getString(R.string.clear_folder_confirm, fileCount))
+            .setTitle(title)
+            .setMessage(getString(confirmMessage, fileCount))
             .setPositiveButton("Delete") { _, _ ->
                 clearRaw2DNGFolder()
             }
             .setNegativeButton("Cancel", null)
             .show()
     }
+    
+    private data class Quad<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)
 
     private fun clearRaw2DNGFolder() {
+        val successMessage = when (currentFilter) {
+            GalleryFilter.DNG_ONLY -> R.string.folder_cleared_dng
+            GalleryFilter.JPEG_ONLY -> R.string.folder_cleared_jpeg
+            GalleryFilter.ALL -> R.string.folder_cleared
+        }
+        
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             // Android 11+ - use createDeleteRequest for user confirmation
             requestDeleteWithMediaStore()
@@ -394,7 +424,7 @@ class GalleryFragment : Fragment() {
                 }
                 
                 if (_binding != null) {
-                    val message = getString(R.string.folder_cleared, deletedCount)
+                    val message = getString(successMessage, deletedCount)
                     Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show()
                     loadImages()
                 }
@@ -403,13 +433,19 @@ class GalleryFragment : Fragment() {
     }
 
     private fun requestDeleteWithMediaStore() {
+        val emptyMessage = when (currentFilter) {
+            GalleryFilter.DNG_ONLY -> R.string.folder_empty_dng
+            GalleryFilter.JPEG_ONLY -> R.string.folder_empty_jpeg
+            GalleryFilter.ALL -> R.string.folder_empty
+        }
+        
         viewLifecycleOwner.lifecycleScope.launch {
             val urisToDelete = withContext(Dispatchers.IO) {
                 getMediaStoreUris()
             }
 
             if (urisToDelete.isEmpty()) {
-                Toast.makeText(requireContext(), getString(R.string.folder_empty), Toast.LENGTH_SHORT).show()
+                Toast.makeText(requireContext(), getString(emptyMessage), Toast.LENGTH_SHORT).show()
                 return@launch
             }
 
@@ -434,15 +470,31 @@ class GalleryFragment : Fragment() {
         val uris = mutableListOf<Uri>()
         val picturesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
         val raw2dngDir = File(picturesDir, "Raw2DNG")
+        val jpegDir = File(raw2dngDir, "JPEG")
 
-        raw2dngDir.listFiles()?.filter { it.isFile && it.extension.lowercase() == "dng" }?.forEach { file ->
-            // Get content URI for this file
-            val uri = getContentUriForFile(file)
-            if (uri != null) {
-                uris.add(uri)
-                Log.d(tag, "Found URI for ${file.name}: $uri")
-            } else {
-                Log.w(tag, "No MediaStore entry for ${file.name}")
+        // Add DNG files if filter allows
+        if (currentFilter == GalleryFilter.DNG_ONLY || currentFilter == GalleryFilter.ALL) {
+            raw2dngDir.listFiles()?.filter { it.isFile && it.extension.lowercase() == "dng" }?.forEach { file ->
+                val uri = getContentUriForFile(file)
+                if (uri != null) {
+                    uris.add(uri)
+                    Log.d(tag, "Found URI for ${file.name}: $uri")
+                } else {
+                    Log.w(tag, "No MediaStore entry for ${file.name}")
+                }
+            }
+        }
+        
+        // Add JPEG files if filter allows
+        if (currentFilter == GalleryFilter.JPEG_ONLY || currentFilter == GalleryFilter.ALL) {
+            jpegDir.listFiles()?.filter { it.isFile && it.extension.lowercase() in listOf("jpg", "jpeg") }?.forEach { file ->
+                val uri = getContentUriForFile(file)
+                if (uri != null) {
+                    uris.add(uri)
+                    Log.d(tag, "Found URI for ${file.name}: $uri")
+                } else {
+                    Log.w(tag, "No MediaStore entry for ${file.name}")
+                }
             }
         }
 
@@ -453,21 +505,37 @@ class GalleryFragment : Fragment() {
         var deletedCount = 0
         val picturesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
         val raw2dngDir = File(picturesDir, "Raw2DNG")
+        val jpegDir = File(raw2dngDir, "JPEG")
         
-        raw2dngDir.listFiles()?.filter { it.isFile && it.extension.lowercase() == "dng" }?.forEach { file ->
-            Log.d(tag, "Deleting file: ${file.absolutePath}")
-            
-            // Delete the actual file
-            if (file.exists() && file.delete()) {
-                deletedCount++
-                Log.d(tag, "File deleted successfully")
-                
-                // Notify MediaScanner about deletion
-                context?.let {
-                    MediaScannerConnection.scanFile(it, arrayOf(file.absolutePath), null, null)
+        // Delete DNG files if filter allows
+        if (currentFilter == GalleryFilter.DNG_ONLY || currentFilter == GalleryFilter.ALL) {
+            raw2dngDir.listFiles()?.filter { it.isFile && it.extension.lowercase() == "dng" }?.forEach { file ->
+                Log.d(tag, "Deleting file: ${file.absolutePath}")
+                if (file.exists() && file.delete()) {
+                    deletedCount++
+                    Log.d(tag, "File deleted successfully")
+                    context?.let {
+                        MediaScannerConnection.scanFile(it, arrayOf(file.absolutePath), null, null)
+                    }
+                } else {
+                    Log.e(tag, "Failed to delete file: ${file.absolutePath}")
                 }
-            } else {
-                Log.e(tag, "Failed to delete file: ${file.absolutePath}")
+            }
+        }
+        
+        // Delete JPEG files if filter allows
+        if (currentFilter == GalleryFilter.JPEG_ONLY || currentFilter == GalleryFilter.ALL) {
+            jpegDir.listFiles()?.filter { it.isFile && it.extension.lowercase() in listOf("jpg", "jpeg") }?.forEach { file ->
+                Log.d(tag, "Deleting file: ${file.absolutePath}")
+                if (file.exists() && file.delete()) {
+                    deletedCount++
+                    Log.d(tag, "File deleted successfully")
+                    context?.let {
+                        MediaScannerConnection.scanFile(it, arrayOf(file.absolutePath), null, null)
+                    }
+                } else {
+                    Log.e(tag, "Failed to delete file: ${file.absolutePath}")
+                }
             }
         }
         

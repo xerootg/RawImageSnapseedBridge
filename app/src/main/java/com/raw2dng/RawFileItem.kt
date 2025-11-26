@@ -11,8 +11,8 @@ data class RawFileItem(
     val size: Long,
     val dateModified: Long,
     val path: String,
-    val isConvertedToDng: Boolean,
-    val isConvertedToJpeg: Boolean,
+    var isConvertedToDng: Boolean,
+    var isConvertedToJpeg: Boolean,
     var isSelected: Boolean = false
 ) {
     /**

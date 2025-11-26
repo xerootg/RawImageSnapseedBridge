@@ -81,8 +81,36 @@ class RawFilePickerFragment : Fragment() {
             // Permissions were just granted, reload files
             Log.d(tag, "Permissions granted, reloading files")
             loadRawFiles()
+        } else if (hasPermissions && allRawFiles.isNotEmpty()) {
+            // Refresh conversion status in case files were deleted from gallery
+            refreshConversionStatus()
         }
         hadPermissionsLastCheck = hasPermissions
+    }
+    
+    /**
+     * Refresh the conversion status of all cached RAW files.
+     * This is called on resume to reflect any changes made in the gallery (e.g., deleted files).
+     */
+    private fun refreshConversionStatus() {
+        viewLifecycleOwner.lifecycleScope.launch {
+            var changed = false
+            withContext(Dispatchers.IO) {
+                allRawFiles.forEach { item ->
+                    val wasDng = item.isConvertedToDng
+                    val wasJpeg = item.isConvertedToJpeg
+                    item.isConvertedToDng = ConvertedFilesHelper.isConvertedToDng(item.name)
+                    item.isConvertedToJpeg = ConvertedFilesHelper.isConvertedToJpeg(item.name)
+                    if (wasDng != item.isConvertedToDng || wasJpeg != item.isConvertedToJpeg) {
+                        changed = true
+                        Log.d(tag, "Conversion status changed for ${item.name}: DNG=$wasDng->${item.isConvertedToDng}, JPEG=$wasJpeg->${item.isConvertedToJpeg}")
+                    }
+                }
+            }
+            if (changed && _binding != null) {
+                applyFilter()
+            }
+        }
     }
 
     private fun hasRequiredPermissions(): Boolean {

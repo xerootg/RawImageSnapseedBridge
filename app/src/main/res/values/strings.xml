@@ -4,6 +4,9 @@
     <string name="select_files">Select RAW Files</string>
     <string name="convert">Convert to DNG</string>
     <string name="clear_folder">Clear Raw2DNG Folder</string>
+    <string name="clear_folder_dng">Clear DNG Files</string>
+    <string name="clear_folder_jpeg">Clear JPEG Files</string>
+    <string name="clear_folder_all">Clear All Files</string>
     <string name="status">Status:</string>
     <string name="idle">Idle</string>
     <string name="converting">Converting %1$d of %2$d</string>
@@ -13,8 +16,14 @@
     <string name="no_files_selected">No files selected</string>
     <string name="files_selected">%1$d file(s) selected</string>
     <string name="clear_folder_confirm">Delete all %1$d files from Pictures/Raw2DNG?</string>
+    <string name="clear_folder_confirm_dng">Delete %1$d DNG file(s)?</string>
+    <string name="clear_folder_confirm_jpeg">Delete %1$d JPEG file(s)?</string>
     <string name="folder_cleared">Cleared %1$d files from Raw2DNG folder</string>
+    <string name="folder_cleared_dng">Cleared %1$d DNG file(s)</string>
+    <string name="folder_cleared_jpeg">Cleared %1$d JPEG file(s)</string>
     <string name="folder_empty">Raw2DNG folder is already empty</string>
+    <string name="folder_empty_dng">No DNG files to clear</string>
+    <string name="folder_empty_jpeg">No JPEG files to clear</string>
     <string name="tab_convert">Convert</string>
     <string name="tab_gallery">Gallery</string>
     <string name="gallery_empty">No converted images yet</string>
