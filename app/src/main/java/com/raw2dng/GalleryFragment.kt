@@ -15,6 +15,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
@@ -81,13 +82,38 @@ class GalleryFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         setupUI()
+        setupBackPressHandler()
         checkPermissionsAndLoad()
+    }
+    
+    private fun setupBackPressHandler() {
+        requireActivity().onBackPressedDispatcher.addCallback(
+            viewLifecycleOwner,
+            object : OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() {
+                    if (adapter.isMultiSelectMode) {
+                        // Exit multi-select mode
+                        adapter.clearSelection()
+                    } else {
+                        // Let the activity handle it (switch to Convert tab)
+                        isEnabled = false
+                        requireActivity().onBackPressedDispatcher.onBackPressed()
+                        isEnabled = true
+                    }
+                }
+            }
+        )
     }
 
     private fun setupUI() {
-        adapter = GalleryAdapter { item ->
-            openImageWith(item)
-        }
+        adapter = GalleryAdapter(
+            onItemClick = { item ->
+                openImageWith(item)
+            },
+            onSelectionChanged = { count ->
+                updateSelectionUI(count)
+            }
+        )
 
         binding.recyclerView.layoutManager = GridLayoutManager(requireContext(), 3)
         binding.recyclerView.adapter = adapter
@@ -96,8 +122,47 @@ class GalleryFragment : Fragment() {
             showClearFolderConfirmation()
         }
         
+        binding.openSelectedButton.setOnClickListener {
+            openSelectedImages()
+        }
+        
         // Setup filter chips
         setupFilterChips()
+    }
+    
+    private fun updateSelectionUI(count: Int) {
+        if (count > 0) {
+            binding.openSelectedButton.text = getString(R.string.open_selected, count)
+            binding.openSelectedButton.visibility = View.VISIBLE
+        } else {
+            binding.openSelectedButton.visibility = View.GONE
+        }
+    }
+    
+    private fun openSelectedImages() {
+        val selectedItems = adapter.getSelectedItems()
+        if (selectedItems.isEmpty()) return
+        
+        try {
+            val intent = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+                type = "image/*"
+                val uris = ArrayList(selectedItems.map { it.uri })
+                putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            
+            val chooser = Intent.createChooser(intent, getString(R.string.open_with)).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            startActivity(chooser)
+            
+            // Clear selection after opening
+            adapter.clearSelection()
+        } catch (e: Exception) {
+            Log.e(tag, "Error opening images", e)
+            Toast.makeText(requireContext(), "Failed to open images", Toast.LENGTH_SHORT).show()
+        }
     }
     
     private fun setupFilterChips() {

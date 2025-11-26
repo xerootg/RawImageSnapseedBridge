@@ -8,6 +8,7 @@ import android.util.Size
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.CheckBox
 import android.widget.ImageView
 import android.widget.TextView
 import androidx.recyclerview.widget.DiffUtil
@@ -27,8 +28,13 @@ data class GalleryItem(
 )
 
 class GalleryAdapter(
-    private val onItemClick: (GalleryItem) -> Unit
+    private val onItemClick: (GalleryItem) -> Unit,
+    private val onSelectionChanged: (Int) -> Unit
 ) : ListAdapter<GalleryItem, GalleryAdapter.ViewHolder>(DiffCallback()) {
+
+    private val selectedIds = mutableSetOf<Long>()
+    var isMultiSelectMode = false
+        private set
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
         val view = LayoutInflater.from(parent.context)
@@ -44,14 +50,58 @@ class GalleryAdapter(
         super.onViewRecycled(holder)
         holder.cancelLoading()
     }
+    
+    fun getSelectedItems(): List<GalleryItem> {
+        return currentList.filter { selectedIds.contains(it.id) }
+    }
+    
+    fun getSelectedCount(): Int = selectedIds.size
+    
+    fun clearSelection() {
+        selectedIds.clear()
+        isMultiSelectMode = false
+        notifyDataSetChanged()
+        onSelectionChanged(0)
+    }
+    
+    private fun toggleSelection(item: GalleryItem) {
+        if (selectedIds.contains(item.id)) {
+            selectedIds.remove(item.id)
+        } else {
+            selectedIds.add(item.id)
+        }
+        
+        // Exit multi-select if no items selected
+        if (selectedIds.isEmpty()) {
+            isMultiSelectMode = false
+        }
+        
+        notifyDataSetChanged()
+        onSelectionChanged(selectedIds.size)
+    }
+    
+    private fun startMultiSelect(item: GalleryItem) {
+        isMultiSelectMode = true
+        selectedIds.add(item.id)
+        notifyDataSetChanged()
+        onSelectionChanged(selectedIds.size)
+    }
 
     inner class ViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val thumbnail: ImageView = itemView.findViewById(R.id.thumbnail)
         private val fileName: TextView = itemView.findViewById(R.id.fileName)
+        private val checkbox: CheckBox = itemView.findViewById(R.id.selectionCheckbox)
         private var loadJob: Job? = null
 
         fun bind(item: GalleryItem) {
             fileName.text = item.name
+            
+            // Show/hide checkbox based on multi-select mode
+            checkbox.visibility = if (isMultiSelectMode) View.VISIBLE else View.GONE
+            checkbox.isChecked = selectedIds.contains(item.id)
+            
+            // Visual feedback for selection
+            itemView.alpha = if (isMultiSelectMode && selectedIds.contains(item.id)) 0.7f else 1.0f
             
             // Cancel any previous loading job
             loadJob?.cancel()
@@ -68,7 +118,18 @@ class GalleryAdapter(
             }
 
             itemView.setOnClickListener {
-                onItemClick(item)
+                if (isMultiSelectMode) {
+                    toggleSelection(item)
+                } else {
+                    onItemClick(item)
+                }
+            }
+            
+            itemView.setOnLongClickListener {
+                if (!isMultiSelectMode) {
+                    startMultiSelect(item)
+                }
+                true
             }
         }
 
