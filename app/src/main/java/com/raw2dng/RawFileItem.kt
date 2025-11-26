@@ -11,7 +11,8 @@ data class RawFileItem(
     val size: Long,
     val dateModified: Long,
     val path: String,
-    val isConverted: Boolean,
+    val isConvertedToDng: Boolean,
+    val isConvertedToJpeg: Boolean,
     var isSelected: Boolean = false
 ) {
     /**
@@ -19,6 +20,12 @@ data class RawFileItem(
      */
     val baseName: String
         get() = name.substringBeforeLast('.')
+    
+    /**
+     * Check if converted to any format (for backwards compatibility)
+     */
+    val isConverted: Boolean
+        get() = isConvertedToDng || isConvertedToJpeg
 
     /**
      * Get a human-readable file size.

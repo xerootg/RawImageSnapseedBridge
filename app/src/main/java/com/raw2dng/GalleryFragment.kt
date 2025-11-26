@@ -27,6 +27,15 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
+/**
+ * Filter options for gallery view.
+ */
+enum class GalleryFilter {
+    ALL,
+    DNG_ONLY,
+    JPEG_ONLY
+}
+
 class GalleryFragment : Fragment() {
 
     private var _binding: FragmentGalleryBinding? = null
@@ -34,6 +43,8 @@ class GalleryFragment : Fragment() {
 
     private lateinit var adapter: GalleryAdapter
     private val tag = "GalleryFragment"
+    
+    private var currentFilter: GalleryFilter = GalleryFilter.DNG_ONLY
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -84,6 +95,44 @@ class GalleryFragment : Fragment() {
         binding.clearFolderButton.setOnClickListener {
             showClearFolderConfirmation()
         }
+        
+        // Setup filter chips
+        setupFilterChips()
+    }
+    
+    private fun setupFilterChips() {
+        // Set initial checked state (DNG is default)
+        binding.chipGalleryDng.isChecked = true
+        
+        binding.chipGalleryAll.setOnClickListener {
+            if (currentFilter != GalleryFilter.ALL) {
+                currentFilter = GalleryFilter.ALL
+                updateFilterChipStates()
+                loadImages()
+            }
+        }
+        
+        binding.chipGalleryDng.setOnClickListener {
+            if (currentFilter != GalleryFilter.DNG_ONLY) {
+                currentFilter = GalleryFilter.DNG_ONLY
+                updateFilterChipStates()
+                loadImages()
+            }
+        }
+        
+        binding.chipGalleryJpeg.setOnClickListener {
+            if (currentFilter != GalleryFilter.JPEG_ONLY) {
+                currentFilter = GalleryFilter.JPEG_ONLY
+                updateFilterChipStates()
+                loadImages()
+            }
+        }
+    }
+    
+    private fun updateFilterChipStates() {
+        binding.chipGalleryAll.isChecked = currentFilter == GalleryFilter.ALL
+        binding.chipGalleryDng.isChecked = currentFilter == GalleryFilter.DNG_ONLY
+        binding.chipGalleryJpeg.isChecked = currentFilter == GalleryFilter.JPEG_ONLY
     }
 
     private fun checkPermissionsAndLoad() {
@@ -127,39 +176,69 @@ class GalleryFragment : Fragment() {
         // Always use direct file access - more reliable for our use case
         val picturesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
         val raw2dngDir = File(picturesDir, "Raw2DNG")
+        val jpegDir = File(raw2dngDir, "JPEG")
         
         Log.d(tag, "Looking for files in: ${raw2dngDir.absolutePath}")
         Log.d(tag, "Directory exists: ${raw2dngDir.exists()}")
+        Log.d(tag, "Current filter: $currentFilter")
         
-        if (raw2dngDir.exists() && raw2dngDir.isDirectory) {
-            val files = raw2dngDir.listFiles()
-            Log.d(tag, "Files found: ${files?.size ?: 0}")
-            
-            files?.filter { it.isFile && it.extension.lowercase() == "dng" }
-                ?.sortedByDescending { it.lastModified() }
-                ?.forEach { file ->
-                    Log.d(tag, "Adding file: ${file.name}")
-                    
-                    // For Android 10+, get content URI via MediaStore query by DATA path
-                    val uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        getContentUriForFile(file) ?: Uri.fromFile(file)
-                    } else {
-                        Uri.fromFile(file)
-                    }
-                    
-                    items.add(
-                        GalleryItem(
-                            id = file.absolutePath.hashCode().toLong(),
-                            uri = uri,
-                            name = file.name,
-                            dateModified = file.lastModified()
+        // Collect DNG files if needed
+        if (currentFilter == GalleryFilter.ALL || currentFilter == GalleryFilter.DNG_ONLY) {
+            if (raw2dngDir.exists() && raw2dngDir.isDirectory) {
+                val files = raw2dngDir.listFiles()
+                files?.filter { it.isFile && it.extension.lowercase() == "dng" }
+                    ?.forEach { file ->
+                        Log.d(tag, "Adding DNG file: ${file.name}")
+                        
+                        val uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                            getContentUriForFile(file) ?: Uri.fromFile(file)
+                        } else {
+                            Uri.fromFile(file)
+                        }
+                        
+                        items.add(
+                            GalleryItem(
+                                id = file.absolutePath.hashCode().toLong(),
+                                uri = uri,
+                                name = file.name,
+                                dateModified = file.lastModified()
+                            )
                         )
-                    )
-                }
+                    }
+            }
         }
         
-        Log.d(tag, "Total items: ${items.size}")
-        return items
+        // Collect JPEG files if needed
+        if (currentFilter == GalleryFilter.ALL || currentFilter == GalleryFilter.JPEG_ONLY) {
+            if (jpegDir.exists() && jpegDir.isDirectory) {
+                val files = jpegDir.listFiles()
+                files?.filter { it.isFile && (it.extension.lowercase() == "jpg" || it.extension.lowercase() == "jpeg") }
+                    ?.forEach { file ->
+                        Log.d(tag, "Adding JPEG file: ${file.name}")
+                        
+                        val uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                            getContentUriForFile(file) ?: Uri.fromFile(file)
+                        } else {
+                            Uri.fromFile(file)
+                        }
+                        
+                        items.add(
+                            GalleryItem(
+                                id = file.absolutePath.hashCode().toLong(),
+                                uri = uri,
+                                name = file.name,
+                                dateModified = file.lastModified()
+                            )
+                        )
+                    }
+            }
+        }
+        
+        // Sort all items by date descending
+        val sortedItems = items.sortedByDescending { it.dateModified }
+        
+        Log.d(tag, "Total items: ${sortedItems.size}")
+        return sortedItems
     }
     
     private fun getContentUriForFile(file: File): Uri? {
@@ -334,6 +413,21 @@ class GalleryFragment : Fragment() {
     fun refresh() {
         if (isAdded && _binding != null) {
             checkPermissionsAndLoad()
+        }
+    }
+    
+    /**
+     * Set the gallery filter and refresh the view.
+     * Called when navigating from conversion completion.
+     */
+    fun setFilter(format: OutputFormat) {
+        currentFilter = when (format) {
+            OutputFormat.DNG -> GalleryFilter.DNG_ONLY
+            OutputFormat.JPEG -> GalleryFilter.JPEG_ONLY
+        }
+        if (isAdded && _binding != null) {
+            updateFilterChipStates()
+            loadImages()
         }
     }
 

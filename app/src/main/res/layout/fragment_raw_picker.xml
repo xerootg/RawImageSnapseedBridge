@@ -29,11 +29,19 @@
                 style="@style/Widget.MaterialComponents.Chip.Filter" />
 
             <com.google.android.material.chip.Chip
-                android:id="@+id/chipHideConverted"
+                android:id="@+id/chipNotDng"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/hide_converted"
+                android:layout_marginEnd="8dp"
+                android:text="@string/not_dng"
                 android:checked="true"
+                style="@style/Widget.MaterialComponents.Chip.Filter" />
+                
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chipNotJpeg"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/not_jpeg"
                 style="@style/Widget.MaterialComponents.Chip.Filter" />
 
         </LinearLayout>
@@ -94,18 +102,33 @@
                 android:id="@+id/btnSelectAll"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginEnd="8dp"
+                android:layout_marginEnd="4dp"
                 android:layout_weight="1"
                 android:text="@string/select_all"
+                android:textSize="12sp"
                 style="@style/Widget.MaterialComponents.Button.OutlinedButton" />
 
             <Button
-                android:id="@+id/btnConvertSelected"
+                android:id="@+id/btnConvertDng"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:layout_marginEnd="4dp"
                 android:layout_weight="1"
                 android:enabled="false"
-                android:text="@string/convert_selected" />
+                android:text="@string/to_dng"
+                android:textSize="12sp" />
+                
+            <Button
+                android:id="@+id/btnConvertJpeg"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:layout_weight="1"
+                android:enabled="false"
+                android:text="@string/to_jpeg"
+                android:textSize="12sp"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton" />
 
         </LinearLayout>
 

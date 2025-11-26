@@ -90,4 +90,35 @@ Java_com_raw2dng_DNGConverter_extractThumbnail(
     }
 }
 
+JNIEXPORT jstring JNICALL
+Java_com_raw2dng_DNGConverter_convertToJPEG(
+        JNIEnv* env,
+        jobject /* this */,
+        jstring inputPath,
+        jstring outputPath,
+        jint quality) {
+    
+    const char* inputPathStr = env->GetStringUTFChars(inputPath, nullptr);
+    const char* outputPathStr = env->GetStringUTFChars(outputPath, nullptr);
+    
+    LOGD("JNI: Converting to JPEG %s -> %s (quality: %d)", inputPathStr, outputPathStr, quality);
+    
+    std::string errorMessage;
+    bool success = raw2dng::LibRawReader::convertToJPEG(
+        std::string(inputPathStr),
+        std::string(outputPathStr),
+        quality,
+        errorMessage
+    );
+    
+    env->ReleaseStringUTFChars(inputPath, inputPathStr);
+    env->ReleaseStringUTFChars(outputPath, outputPathStr);
+    
+    if (success) {
+        return env->NewStringUTF("");  // Empty string indicates success
+    } else {
+        return env->NewStringUTF(errorMessage.c_str());
+    }
+}
+
 } // extern "C"

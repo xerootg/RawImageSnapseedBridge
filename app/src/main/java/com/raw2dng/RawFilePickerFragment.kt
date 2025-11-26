@@ -35,10 +35,18 @@ class RawFilePickerFragment : Fragment() {
 
     private lateinit var adapter: RawFileAdapter
     private var allRawFiles = mutableListOf<RawFileItem>()
-    private var hideConverted = true
+    private var currentFilter: FileFilter = FileFilter.NOT_DNG
     private var hadPermissionsLastCheck = false
+    private var lastConversionFormat: OutputFormat = OutputFormat.DNG
 
     private val tag = "RawFilePicker"
+
+    // Filter options for the file picker
+    enum class FileFilter {
+        ALL,
+        NOT_DNG,
+        NOT_JPEG
+    }
 
     // Conversion
     private val converter = DNGConverter()
@@ -104,17 +112,28 @@ class RawFilePickerFragment : Fragment() {
         binding.rawFilesRecycler.layoutManager = LinearLayoutManager(requireContext())
         binding.rawFilesRecycler.adapter = adapter
 
+        // Filter chip listeners
         binding.chipShowAll.setOnClickListener {
-            hideConverted = false
+            currentFilter = FileFilter.ALL
             binding.chipShowAll.isChecked = true
-            binding.chipHideConverted.isChecked = false
+            binding.chipNotDng.isChecked = false
+            binding.chipNotJpeg.isChecked = false
             applyFilter()
         }
 
-        binding.chipHideConverted.setOnClickListener {
-            hideConverted = true
+        binding.chipNotDng.setOnClickListener {
+            currentFilter = FileFilter.NOT_DNG
             binding.chipShowAll.isChecked = false
-            binding.chipHideConverted.isChecked = true
+            binding.chipNotDng.isChecked = true
+            binding.chipNotJpeg.isChecked = false
+            applyFilter()
+        }
+        
+        binding.chipNotJpeg.setOnClickListener {
+            currentFilter = FileFilter.NOT_JPEG
+            binding.chipShowAll.isChecked = false
+            binding.chipNotDng.isChecked = false
+            binding.chipNotJpeg.isChecked = true
             applyFilter()
         }
 
@@ -128,16 +147,23 @@ class RawFilePickerFragment : Fragment() {
             updateSelectionUI()
         }
 
-        binding.btnConvertSelected.setOnClickListener {
+        binding.btnConvertDng.setOnClickListener {
             val selected = adapter.getSelectedItems()
             if (selected.isNotEmpty()) {
-                startConversion(selected)
+                startConversion(selected, OutputFormat.DNG)
+            }
+        }
+        
+        binding.btnConvertJpeg.setOnClickListener {
+            val selected = adapter.getSelectedItems()
+            if (selected.isNotEmpty()) {
+                startConversion(selected, OutputFormat.JPEG)
             }
         }
 
-        // Done button navigates to Gallery tab
+        // Done button navigates to Gallery tab with the appropriate filter
         binding.btnDone.setOnClickListener {
-            (activity as? MainActivity)?.navigateToGallery()
+            (activity as? MainActivity)?.navigateToGallery(lastConversionFormat)
             // Reset the view for next time
             showPickerContent()
         }
@@ -226,9 +252,10 @@ class RawFilePickerFragment : Fragment() {
                     id
                 )
 
-                val isConverted = ConvertedFilesHelper.isConverted(name)
+                val isConvertedToDng = ConvertedFilesHelper.isConvertedToDng(name)
+                val isConvertedToJpeg = ConvertedFilesHelper.isConvertedToJpeg(name)
 
-                files.add(RawFileItem(uri, name, size, date, "", isConverted))
+                files.add(RawFileItem(uri, name, size, date, "", isConvertedToDng, isConvertedToJpeg))
             }
         }
 
@@ -236,10 +263,10 @@ class RawFilePickerFragment : Fragment() {
     }
 
     private fun getFilteredFiles(): List<RawFileItem> {
-        return if (hideConverted) {
-            allRawFiles.filter { !it.isConverted }
-        } else {
-            allRawFiles
+        return when (currentFilter) {
+            FileFilter.ALL -> allRawFiles
+            FileFilter.NOT_DNG -> allRawFiles.filter { !it.isConvertedToDng }
+            FileFilter.NOT_JPEG -> allRawFiles.filter { !it.isConvertedToJpeg }
         }
     }
 
@@ -248,13 +275,14 @@ class RawFilePickerFragment : Fragment() {
         adapter.submitList(filtered)
         
         val totalCount = allRawFiles.size
-        val convertedCount = allRawFiles.count { it.isConverted }
+        val dngCount = allRawFiles.count { it.isConvertedToDng }
+        val jpegCount = allRawFiles.count { it.isConvertedToJpeg }
         val showingCount = filtered.size
         
-        binding.selectionCount.text = if (hideConverted) {
-            "$showingCount unconverted files ($convertedCount already converted)"
-        } else {
-            "$totalCount files found ($convertedCount already converted)"
+        binding.selectionCount.text = when (currentFilter) {
+            FileFilter.ALL -> "$totalCount files ($dngCount DNG, $jpegCount JPEG converted)"
+            FileFilter.NOT_DNG -> "$showingCount not converted to DNG ($dngCount already DNG)"
+            FileFilter.NOT_JPEG -> "$showingCount not converted to JPEG ($jpegCount already JPEG)"
         }
 
         updateSelectionUI()
@@ -264,11 +292,19 @@ class RawFilePickerFragment : Fragment() {
         val selectedCount = adapter.getSelectedItems().size
         val totalVisible = getFilteredFiles().size
 
-        binding.btnConvertSelected.isEnabled = selectedCount > 0
-        binding.btnConvertSelected.text = if (selectedCount > 0) {
-            "Convert ($selectedCount)"
+        binding.btnConvertDng.isEnabled = selectedCount > 0
+        binding.btnConvertJpeg.isEnabled = selectedCount > 0
+        
+        binding.btnConvertDng.text = if (selectedCount > 0) {
+            "DNG ($selectedCount)"
         } else {
-            getString(R.string.convert_selected)
+            getString(R.string.to_dng)
+        }
+        
+        binding.btnConvertJpeg.text = if (selectedCount > 0) {
+            "JPEG ($selectedCount)"
+        } else {
+            getString(R.string.to_jpeg)
         }
 
         binding.btnSelectAll.text = if (selectedCount == totalVisible && totalVisible > 0) {
@@ -310,13 +346,13 @@ class RawFilePickerFragment : Fragment() {
             }
         })
 
-        // Handle convert request from preview dialog
+        // Handle convert request from preview dialog - default to DNG
         previewDialog.setOnConvertRequestedListener(object : ImagePreviewDialog.OnConvertRequestedListener {
             override fun onConvertRequested() {
                 val selected = adapter.getSelectedItems()
                 if (selected.isNotEmpty()) {
                     previewDialog.dismiss()
-                    startConversion(selected)
+                    startConversion(selected, OutputFormat.DNG)
                 }
             }
         })
@@ -326,8 +362,11 @@ class RawFilePickerFragment : Fragment() {
 
     // === Conversion Logic ===
 
-    private fun startConversion(selectedFiles: List<RawFileItem>) {
+    private fun startConversion(selectedFiles: List<RawFileItem>, outputFormat: OutputFormat) {
         if (selectedFiles.isEmpty()) return
+        
+        // Track the format for navigation after completion
+        lastConversionFormat = outputFormat
 
         // Show conversion overlay
         showConversionOverlay()
@@ -335,18 +374,21 @@ class RawFilePickerFragment : Fragment() {
         binding.conversionProgressBar.max = selectedFiles.size
         binding.conversionProgressBar.progress = 0
         binding.btnDone.isEnabled = false
+        
+        val formatName = if (outputFormat == OutputFormat.DNG) "DNG" else "JPEG"
+        val extension = if (outputFormat == OutputFormat.DNG) "dng" else "jpg"
 
-        logMessage("Starting conversion of ${selectedFiles.size} file(s)...")
+        logMessage("Starting $formatName conversion of ${selectedFiles.size} file(s)...")
         logMessage("Output directory: Pictures/Raw2DNG")
 
         val tasks = selectedFiles.mapNotNull { rawFile ->
             try {
                 val fileName = rawFile.name
                 val inputPath = copyUriToCache(rawFile.uri, fileName)
-                val outputFileName = fileName.substringBeforeLast('.') + ".dng"
+                val outputFileName = fileName.substringBeforeLast('.') + ".$extension"
                 val outputPath = File(requireContext().cacheDir, outputFileName).absolutePath
 
-                ConversionTask(rawFile.uri, inputPath, outputPath, fileName)
+                ConversionTask(rawFile.uri, inputPath, outputPath, fileName, outputFormat)
             } catch (e: Exception) {
                 Log.e(tag, "Error preparing task for ${rawFile.uri}", e)
                 logMessage("Error: ${e.message}")
@@ -366,11 +408,13 @@ class RawFilePickerFragment : Fragment() {
                 activity?.runOnUiThread {
                     if (result.success) {
                         val outputFile = File(result.task.outputPath)
-                        val finalUri = saveToPublicStorage(outputFile)
+                        val finalUri = saveToPublicStorage(outputFile, result.task.outputFormat)
                         outputFile.delete()
+                        
+                        val ext = if (result.task.outputFormat == OutputFormat.DNG) "dng" else "jpg"
 
                         if (finalUri != null) {
-                            val outputName = result.task.fileName.substringBeforeLast('.') + ".dng"
+                            val outputName = result.task.fileName.substringBeforeLast('.') + ".$ext"
                             logMessage("✓ ${result.task.fileName} -> $outputName")
                         } else {
                             logMessage("✓ ${result.task.fileName} (warning: couldn't add to gallery)")
@@ -441,19 +485,29 @@ class RawFilePickerFragment : Fragment() {
         return cacheFile.absolutePath
     }
 
-    private fun saveToPublicStorage(sourceFile: File): Uri? {
+    private fun saveToPublicStorage(sourceFile: File, outputFormat: OutputFormat = OutputFormat.DNG): Uri? {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            saveToMediaStore(sourceFile)
+            saveToMediaStore(sourceFile, outputFormat)
         } else {
-            saveToPublicDirectory(sourceFile)
+            saveToPublicDirectory(sourceFile, outputFormat)
         }
     }
 
-    private fun saveToMediaStore(sourceFile: File): Uri? {
+    private fun saveToMediaStore(sourceFile: File, outputFormat: OutputFormat): Uri? {
+        val mimeType = when (outputFormat) {
+            OutputFormat.DNG -> "image/x-adobe-dng"
+            OutputFormat.JPEG -> "image/jpeg"
+        }
+        
+        val relativePath = when (outputFormat) {
+            OutputFormat.DNG -> "${Environment.DIRECTORY_PICTURES}/Raw2DNG"
+            OutputFormat.JPEG -> "${Environment.DIRECTORY_PICTURES}/Raw2DNG/JPEG"
+        }
+        
         val contentValues = ContentValues().apply {
             put(MediaStore.Images.Media.DISPLAY_NAME, sourceFile.name)
-            put(MediaStore.Images.Media.MIME_TYPE, "image/x-adobe-dng")
-            put(MediaStore.Images.Media.RELATIVE_PATH, "${Environment.DIRECTORY_PICTURES}/Raw2DNG")
+            put(MediaStore.Images.Media.MIME_TYPE, mimeType)
+            put(MediaStore.Images.Media.RELATIVE_PATH, relativePath)
             put(MediaStore.Images.Media.IS_PENDING, 1)
         }
 
@@ -480,10 +534,14 @@ class RawFilePickerFragment : Fragment() {
         }
     }
 
-    private fun saveToPublicDirectory(sourceFile: File): Uri? {
+    private fun saveToPublicDirectory(sourceFile: File, outputFormat: OutputFormat): Uri? {
         return try {
             val picturesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
-            val outputDir = File(picturesDir, "Raw2DNG")
+            val subDir = when (outputFormat) {
+                OutputFormat.DNG -> "Raw2DNG"
+                OutputFormat.JPEG -> "Raw2DNG/JPEG"
+            }
+            val outputDir = File(picturesDir, subDir)
             if (!outputDir.exists()) {
                 outputDir.mkdirs()
             }
@@ -495,10 +553,15 @@ class RawFilePickerFragment : Fragment() {
                 }
             }
 
+            val mimeType = when (outputFormat) {
+                OutputFormat.DNG -> "image/x-adobe-dng"
+                OutputFormat.JPEG -> "image/jpeg"
+            }
+            
             MediaScannerConnection.scanFile(
                 requireContext(),
                 arrayOf(destFile.absolutePath),
-                arrayOf("image/x-adobe-dng")
+                arrayOf(mimeType)
             ) { path, uri ->
                 Log.d(tag, "MediaScanner scanned: $path -> $uri")
             }

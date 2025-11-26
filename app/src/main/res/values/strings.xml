@@ -12,7 +12,7 @@
     <string name="select_raw_files">Select RAW files (CR2, ARW, etc.)</string>
     <string name="no_files_selected">No files selected</string>
     <string name="files_selected">%1$d file(s) selected</string>
-    <string name="clear_folder_confirm">Delete all %1$d DNG files from Pictures/Raw2DNG?</string>
+    <string name="clear_folder_confirm">Delete all %1$d files from Pictures/Raw2DNG?</string>
     <string name="folder_cleared">Cleared %1$d files from Raw2DNG folder</string>
     <string name="folder_empty">Raw2DNG folder is already empty</string>
     <string name="tab_convert">Convert</string>
@@ -24,11 +24,18 @@
     <!-- RAW File Picker -->
     <string name="raw_file_thumbnail">RAW file thumbnail</string>
     <string name="converted">CONVERTED</string>
+    <string name="converted_dng">DNG</string>
+    <string name="converted_jpeg">JPEG</string>
+    <string name="converted_both">DNG+JPEG</string>
     <string name="show_all">Show All</string>
     <string name="hide_converted">Hide Converted</string>
+    <string name="not_dng">Not DNG</string>
+    <string name="not_jpeg">Not JPEG</string>
     <string name="no_raw_files_found">No RAW files found</string>
     <string name="select_all">Select All</string>
     <string name="convert_selected">Convert Selected</string>
+    <string name="to_dng">To DNG</string>
+    <string name="to_jpeg">To JPEG</string>
     <string name="files_found">%1$d RAW files found</string>
     <string name="files_selected_of">%1$d of %2$d selected</string>
     <string name="loading_files">Loading RAW files…</string>
@@ -46,4 +53,9 @@
     <string name="converting_files">Converting Files…</string>
     <string name="done">Done</string>
     <string name="view_gallery">View Gallery</string>
+    
+    <!-- Gallery filter -->
+    <string name="dng_files">DNG</string>
+    <string name="jpeg_files">JPEG</string>
+    <string name="all_files">All</string>
 </resources>

@@ -97,13 +97,27 @@ class RawFileAdapter(
             fileName.text = item.name
             fileInfo.text = item.formattedSize
 
-            // Show converted badge
-            if (item.isConverted) {
-                convertedBadge.visibility = View.VISIBLE
-                itemView.alpha = 0.6f
-            } else {
-                convertedBadge.visibility = View.GONE
-                itemView.alpha = 1.0f
+            // Show converted badge with format(s)
+            when {
+                item.isConvertedToDng && item.isConvertedToJpeg -> {
+                    convertedBadge.visibility = View.VISIBLE
+                    convertedBadge.text = "DNG, JPEG"
+                    itemView.alpha = 0.6f
+                }
+                item.isConvertedToDng -> {
+                    convertedBadge.visibility = View.VISIBLE
+                    convertedBadge.text = "DNG"
+                    itemView.alpha = 0.6f
+                }
+                item.isConvertedToJpeg -> {
+                    convertedBadge.visibility = View.VISIBLE
+                    convertedBadge.text = "JPEG"
+                    itemView.alpha = 0.6f
+                }
+                else -> {
+                    convertedBadge.visibility = View.GONE
+                    itemView.alpha = 1.0f
+                }
             }
 
             // Checkbox state

@@ -10,7 +10,7 @@ class DNGConverter {
             System.loadLibrary("raw2dng")
         }
         
-        // Singleton instance for thumbnail extraction
+        // Singleton instance for thumbnail extraction and JPEG conversion
         val instance = DNGConverter()
     }
 
@@ -21,6 +21,15 @@ class DNGConverter {
      * @return Empty string if successful, error message otherwise
      */
     external fun convertToDNG(inputPath: String, outputPath: String): String
+
+    /**
+     * Convert a RAW file to JPEG format
+     * @param inputPath Path to input RAW file  
+     * @param outputPath Path for output JPEG file
+     * @param quality JPEG quality (1-100, default 90)
+     * @return Empty string if successful, error message otherwise
+     */
+    external fun convertToJPEG(inputPath: String, outputPath: String, quality: Int = 90): String
 
     /**
      * Extract or generate a thumbnail/preview from a RAW file

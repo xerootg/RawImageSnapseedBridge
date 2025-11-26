@@ -107,6 +107,11 @@ class MainActivity : AppCompatActivity() {
     fun navigateToGallery() {
         binding.viewPager.currentItem = 1
     }
+    
+    fun navigateToGallery(filterFormat: OutputFormat) {
+        galleryFragment?.setFilter(filterFormat)
+        binding.viewPager.currentItem = 1
+    }
 
     private inner class TabAdapter(activity: AppCompatActivity) : FragmentStateAdapter(activity) {
         override fun getItemCount(): Int = 2

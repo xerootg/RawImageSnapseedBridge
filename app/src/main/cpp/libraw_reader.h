@@ -92,6 +92,14 @@ public:
     static bool extractThumbnail(const std::string& inputPath, 
                                  const std::string& outputPath,
                                  std::string& errorMessage);
+    
+    // Static method to convert RAW to JPEG
+    // Processes the RAW file and writes a full-resolution JPEG
+    // Returns true on success, false on failure (sets errorMessage)
+    static bool convertToJPEG(const std::string& inputPath,
+                              const std::string& outputPath,
+                              int quality,
+                              std::string& errorMessage);
 
 private:
     std::unique_ptr<LibRaw> processor_;

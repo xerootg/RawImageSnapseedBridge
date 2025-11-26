@@ -6,6 +6,11 @@
 #include <android/log.h>
 #include <cstring>
 #include <algorithm>
+#include <cstdio>
+
+extern "C" {
+#include "jpeglib/jpeglib.h"
+}
 
 #define LOG_TAG "LibRawReader"
 // Use ERROR level for all logs so they definitely appear in logcat
@@ -368,6 +373,114 @@ bool LibRawReader::extractThumbnail(const std::string& inputPath,
     fclose(fp);
     
     LOGD("Successfully wrote preview to: %s", outputPath.c_str());
+    
+    processor.dcraw_clear_mem(image);
+    processor.recycle();
+    return true;
+}
+
+bool LibRawReader::convertToJPEG(const std::string& inputPath,
+                                  const std::string& outputPath,
+                                  int quality,
+                                  std::string& errorMessage) {
+    LibRaw processor;
+    
+    LOGD("Converting RAW to JPEG: %s -> %s (quality: %d)", 
+         inputPath.c_str(), outputPath.c_str(), quality);
+    
+    // Clamp quality to valid range
+    if (quality < 1) quality = 1;
+    if (quality > 100) quality = 100;
+    
+    // Open the file
+    int ret = processor.open_file(inputPath.c_str());
+    if (ret != LIBRAW_SUCCESS) {
+        errorMessage = "Failed to open RAW file: " + std::string(libraw_strerror(ret));
+        LOGE("%s", errorMessage.c_str());
+        return false;
+    }
+    
+    LOGD("Camera: %s %s", processor.imgdata.idata.make, processor.imgdata.idata.model);
+    
+    // Unpack raw data
+    ret = processor.unpack();
+    if (ret != LIBRAW_SUCCESS) {
+        errorMessage = "Failed to unpack RAW data: " + std::string(libraw_strerror(ret));
+        LOGE("%s", errorMessage.c_str());
+        processor.recycle();
+        return false;
+    }
+    
+    // Configure for high quality output
+    processor.imgdata.params.half_size = 0;         // Full resolution
+    processor.imgdata.params.use_camera_wb = 1;     // Use camera white balance
+    processor.imgdata.params.use_auto_wb = 0;       // Don't use auto WB
+    processor.imgdata.params.output_bps = 8;        // 8-bit output for JPEG
+    processor.imgdata.params.user_qual = 3;         // AHD interpolation (high quality)
+    processor.imgdata.params.no_auto_bright = 0;    // Allow auto brightness
+    processor.imgdata.params.output_color = 1;      // sRGB colorspace
+    
+    // Process the RAW data
+    ret = processor.dcraw_process();
+    if (ret != LIBRAW_SUCCESS) {
+        errorMessage = "Failed to process RAW data: " + std::string(libraw_strerror(ret));
+        LOGE("%s", errorMessage.c_str());
+        processor.recycle();
+        return false;
+    }
+    
+    // Get the processed image
+    libraw_processed_image_t* image = processor.dcraw_make_mem_image(&ret);
+    if (ret != LIBRAW_SUCCESS || image == nullptr) {
+        errorMessage = "Failed to create memory image: " + std::string(libraw_strerror(ret));
+        LOGE("%s", errorMessage.c_str());
+        processor.recycle();
+        return false;
+    }
+    
+    LOGD("Processed image: %dx%d, %d bits, %d colors", 
+         image->width, image->height, image->bits, image->colors);
+    
+    // Write JPEG using libjpeg
+    FILE* outfile = fopen(outputPath.c_str(), "wb");
+    if (!outfile) {
+        errorMessage = "Failed to open output file for writing";
+        LOGE("%s", errorMessage.c_str());
+        processor.dcraw_clear_mem(image);
+        processor.recycle();
+        return false;
+    }
+    
+    struct jpeg_compress_struct cinfo;
+    struct jpeg_error_mgr jerr;
+    
+    cinfo.err = jpeg_std_error(&jerr);
+    jpeg_create_compress(&cinfo);
+    jpeg_stdio_dest(&cinfo, outfile);
+    
+    cinfo.image_width = image->width;
+    cinfo.image_height = image->height;
+    cinfo.input_components = 3;
+    cinfo.in_color_space = JCS_RGB;
+    
+    jpeg_set_defaults(&cinfo);
+    jpeg_set_quality(&cinfo, quality, TRUE);
+    
+    jpeg_start_compress(&cinfo, TRUE);
+    
+    JSAMPROW row_pointer[1];
+    int row_stride = image->width * 3;
+    
+    while (cinfo.next_scanline < cinfo.image_height) {
+        row_pointer[0] = &image->data[cinfo.next_scanline * row_stride];
+        jpeg_write_scanlines(&cinfo, row_pointer, 1);
+    }
+    
+    jpeg_finish_compress(&cinfo);
+    jpeg_destroy_compress(&cinfo);
+    fclose(outfile);
+    
+    LOGD("Successfully wrote JPEG: %s", outputPath.c_str());
     
     processor.dcraw_clear_mem(image);
     processor.recycle();

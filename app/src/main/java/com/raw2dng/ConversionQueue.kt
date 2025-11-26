@@ -10,7 +10,8 @@ data class ConversionTask(
     val inputUri: Uri,
     val inputPath: String,
     val outputPath: String,
-    val fileName: String
+    val fileName: String,
+    val outputFormat: OutputFormat = OutputFormat.DNG
 )
 
 data class ConversionResult(
@@ -71,15 +72,18 @@ class ConversionQueue(
     private suspend fun processTask(task: ConversionTask) {
         withContext(Dispatchers.IO) {
             try {
-                Log.d(tag, "Processing: ${task.fileName}")
+                Log.d(tag, "Processing: ${task.fileName} -> ${task.outputFormat}")
 
                 completed++
                 withContext(Dispatchers.Main) {
                     onProgress(completed, tasks.size)
                 }
 
-                // Perform the conversion
-                val errorMessage = converter.convertToDNG(task.inputPath, task.outputPath)
+                // Perform the conversion based on format
+                val errorMessage = when (task.outputFormat) {
+                    OutputFormat.DNG -> converter.convertToDNG(task.inputPath, task.outputPath)
+                    OutputFormat.JPEG -> converter.convertToJPEG(task.inputPath, task.outputPath, 90)
+                }
 
                 val result = if (errorMessage.isEmpty()) {
                     successful++
