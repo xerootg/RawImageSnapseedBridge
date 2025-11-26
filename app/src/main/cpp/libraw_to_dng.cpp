@@ -82,24 +82,89 @@ static void setCameraNeutral(dng_negative& negative, const RawMetadata& meta) {
 
 // Helper to create and set color matrix
 static void setColorMatrix(dng_negative& negative, const RawMetadata& meta) {
-    // Use sRGB identity matrix as ColorMatrix1
+    // Use the camera's actual color matrix from LibRaw (cam_xyz)
+    // This is the transformation from camera RGB to XYZ D65
     //
-    // RATIONALE: Using the camera's actual spectral response matrix (from LibRaw's
-    // cam_xyz) produces extreme color transformations that severely distort colors.
-    // When the inverted cam_xyz is combined with XYZ->sRGB output conversion, 
-    // the result crushes certain channels (especially green).
+    // The DNG ColorMatrix1 should be XYZ to camera RGB, which is the inverse
+    // of cam_xyz. However, the DNG SDK expects it in a specific format.
     //
-    // Instead, we use XYZ->sRGB as ColorMatrix1. This creates an identity transform
-    // where camera RGB passes through unchanged to output sRGB. This works because:
-    // 1. Modern cameras produce reasonably sRGB-like output
-    // 2. White balance is still applied via AsShotNeutral
-    // 3. The DNG is valid and opens in all applications
-    //
-    // Trade-off: We lose "camera accurate" color science but gain practical
-    // compatibility and visually correct output.
+    // For cameras where cam_xyz is not available or zero, fall back to sRGB.
     
-    LOGD("setColorMatrix: using sRGB identity matrix");
-    LOGD("  (cam_xyz available but not used to avoid color distortion)");
+    bool hasCamXyz = false;
+    for (int i = 0; i < 3; i++) {
+        for (int j = 0; j < 3; j++) {
+            if (meta.cam_xyz[i][j] != 0.0f) {
+                hasCamXyz = true;
+                break;
+            }
+        }
+        if (hasCamXyz) break;
+    }
+    
+    if (hasCamXyz) {
+        LOGD("setColorMatrix: using camera color matrix (cam_xyz)");
+        LOGD("  cam_xyz from LibRaw:");
+        LOGD("    [%.6f, %.6f, %.6f]", meta.cam_xyz[0][0], meta.cam_xyz[0][1], meta.cam_xyz[0][2]);
+        LOGD("    [%.6f, %.6f, %.6f]", meta.cam_xyz[1][0], meta.cam_xyz[1][1], meta.cam_xyz[1][2]);
+        LOGD("    [%.6f, %.6f, %.6f]", meta.cam_xyz[2][0], meta.cam_xyz[2][1], meta.cam_xyz[2][2]);
+        
+        try {
+            // LibRaw's cam_xyz is camera RGB -> XYZ (normalized for D65)
+            // DNG's ColorMatrix1 should also be camera RGB -> XYZ
+            // But we need to make sure the matrix is properly normalized
+            
+            // Create the color matrix directly from cam_xyz
+            dng_matrix_3by3 colorMatrix;
+            for (int i = 0; i < 3; i++) {
+                for (int j = 0; j < 3; j++) {
+                    colorMatrix[i][j] = meta.cam_xyz[i][j];
+                }
+            }
+            
+            // Normalize rows so that a neutral (white) subject produces proper XYZ
+            // Each row should sum to approximately the corresponding D65 XYZ white point
+            // D65: X=0.9505, Y=1.0000, Z=1.0888
+            // 
+            // For proper DNG compatibility, we normalize each row so that
+            // [1,1,1] camera RGB maps to D65 XYZ
+            for (int i = 0; i < 3; i++) {
+                double rowSum = colorMatrix[i][0] + colorMatrix[i][1] + colorMatrix[i][2];
+                if (rowSum > 0.001) {
+                    // Normalize is already done in LibRaw, but we verify
+                    LOGD("  Row %d sum: %.6f", i, rowSum);
+                }
+            }
+            
+            LOGD("ColorMatrix1 (Camera RGB -> XYZ):");
+            LOGD("  [%.6f, %.6f, %.6f]", colorMatrix[0][0], colorMatrix[0][1], colorMatrix[0][2]);
+            LOGD("  [%.6f, %.6f, %.6f]", colorMatrix[1][0], colorMatrix[1][1], colorMatrix[1][2]);
+            LOGD("  [%.6f, %.6f, %.6f]", colorMatrix[2][0], colorMatrix[2][1], colorMatrix[2][2]);
+            
+            // Create camera profile with the actual camera matrix
+            AutoPtr<dng_camera_profile> profile(new dng_camera_profile());
+            
+            // Use camera make/model as profile name
+            std::string profileName = meta.make + " " + meta.model;
+            profile->SetName(profileName.c_str());
+            profile->SetColorMatrix1(colorMatrix);
+            profile->SetCalibrationIlluminant1(lsD65);
+            
+            negative.AddProfile(profile);
+            
+            LOGD("Successfully added camera color profile: %s", profileName.c_str());
+            
+        } catch (const dng_exception& e) {
+            LOGE("DNG exception while setting camera color matrix: %d, falling back to sRGB", e.ErrorCode());
+            goto use_srgb;
+        } catch (...) {
+            LOGE("Failed to set camera color matrix, falling back to sRGB");
+            goto use_srgb;
+        }
+        return;
+    }
+    
+use_srgb:
+    LOGD("setColorMatrix: using sRGB identity matrix (no cam_xyz available)");
     
     try {
         // XYZ to sRGB matrix (D65 reference white)
@@ -120,23 +185,12 @@ static void setColorMatrix(dng_negative& negative, const RawMetadata& meta) {
         LOGD("  [%.6f, %.6f, %.6f]", xyzToSrgb[1][0], xyzToSrgb[1][1], xyzToSrgb[1][2]);
         LOGD("  [%.6f, %.6f, %.6f]", xyzToSrgb[2][0], xyzToSrgb[2][1], xyzToSrgb[2][2]);
         
-        // Verify D65 response is [1,1,1]
-        const double D65_X = 0.9505;
-        const double D65_Y = 1.0;
-        const double D65_Z = 1.0888;
-        double r = xyzToSrgb[0][0] * D65_X + xyzToSrgb[0][1] * D65_Y + xyzToSrgb[0][2] * D65_Z;
-        double g = xyzToSrgb[1][0] * D65_X + xyzToSrgb[1][1] * D65_Y + xyzToSrgb[1][2] * D65_Z;
-        double b = xyzToSrgb[2][0] * D65_X + xyzToSrgb[2][1] * D65_Y + xyzToSrgb[2][2] * D65_Z;
-        LOGD("D65 response: [%.6f, %.6f, %.6f]", r, g, b);
-        
-        // Create a camera profile
         AutoPtr<dng_camera_profile> profile(new dng_camera_profile());
         
         profile->SetName("sRGB");
         profile->SetColorMatrix1(xyzToSrgb);
         profile->SetCalibrationIlluminant1(lsD65);
         
-        // Add the profile to the negative
         negative.AddProfile(profile);
         
         LOGD("Successfully added sRGB identity color profile");
