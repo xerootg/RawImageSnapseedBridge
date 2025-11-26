@@ -202,9 +202,12 @@ class GalleryFragment : Fragment() {
             val intent = Intent(Intent.ACTION_VIEW).apply {
                 setDataAndType(item.uri, "image/x-adobe-dng")
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             
-            val chooser = Intent.createChooser(intent, getString(R.string.open_with))
+            val chooser = Intent.createChooser(intent, getString(R.string.open_with)).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
             startActivity(chooser)
         } catch (e: Exception) {
             Log.e(tag, "Error opening image", e)

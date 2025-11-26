@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -44,7 +45,25 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         setupTabs()
+        setupBackNavigation()
         checkPermissions()
+    }
+
+    private fun setupBackNavigation() {
+        val callback = object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (binding.viewPager.currentItem > 0) {
+                    // Go back to first tab
+                    binding.viewPager.currentItem = 0
+                } else {
+                    // On first tab, exit the app
+                    isEnabled = false
+                    onBackPressedDispatcher.onBackPressed()
+                    isEnabled = true  // Re-enable for next time
+                }
+            }
+        }
+        onBackPressedDispatcher.addCallback(this, callback)
     }
 
     private fun checkPermissions() {
