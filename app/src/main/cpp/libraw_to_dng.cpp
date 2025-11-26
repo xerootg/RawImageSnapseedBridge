@@ -368,17 +368,71 @@ bool convertRawToDNG(const std::string& inputPath,
              activeArea.t, activeArea.l, activeArea.b, activeArea.r);
         
         // Step 6: Set black and white levels
-        // Use the maximum of global and per-channel black
-        uint32 blackLevel = meta.black;
-        if (meta.cblack[0] > 0 || meta.cblack[1] > 0 || 
-            meta.cblack[2] > 0 || meta.cblack[3] > 0) {
-            blackLevel = std::max({meta.cblack[0], meta.cblack[1], 
-                                   meta.cblack[2], meta.cblack[3]});
+        // Use per-channel black levels with SetQuadBlacks for accurate dark area rendering
+        // LibRaw cblack is indexed by COLOR: [R, G1, B, G2]
+        // DNG QuadBlacks is indexed by POSITION in 2x2: [top-left, top-right, bottom-left, bottom-right]
+        // We need to map color indices to position indices based on Bayer phase
+        
+        // Get per-channel black levels (fall back to global if per-channel not available)
+        real64 blackR = (meta.cblack[0] > 0) ? meta.cblack[0] : meta.black;
+        real64 blackG1 = (meta.cblack[1] > 0) ? meta.cblack[1] : meta.black;
+        real64 blackB = (meta.cblack[2] > 0) ? meta.cblack[2] : meta.black;
+        real64 blackG2 = (meta.cblack[3] > 0) ? meta.cblack[3] : meta.black;
+        
+        // If all cblack values are 0, use the global black level
+        if (meta.cblack[0] == 0 && meta.cblack[1] == 0 && 
+            meta.cblack[2] == 0 && meta.cblack[3] == 0) {
+            blackR = blackG1 = blackB = blackG2 = meta.black;
         }
-        negative->SetBlackLevel(blackLevel);
+        
+        LOGD("Per-channel black levels: R=%.1f, G1=%.1f, B=%.1f, G2=%.1f (global=%u)",
+             blackR, blackG1, blackB, blackG2, meta.black);
+        
+        // Map color black levels to quad positions based on Bayer phase
+        // DNG phase values and their 2x2 patterns:
+        // Phase 0: GRBG [G,R; B,G] - top-left=G, top-right=R, bottom-left=B, bottom-right=G
+        // Phase 1: RGGB [R,G; G,B] - top-left=R, top-right=G, bottom-left=G, bottom-right=B
+        // Phase 2: BGGR [B,G; G,R] - top-left=B, top-right=G, bottom-left=G, bottom-right=R
+        // Phase 3: GBRG [G,B; R,G] - top-left=G, top-right=B, bottom-left=R, bottom-right=G
+        real64 quadBlack0, quadBlack1, quadBlack2, quadBlack3;
+        
+        switch (phase) {
+            case 0:  // GRBG: [G,R; B,G]
+                quadBlack0 = blackG1;  // top-left = G
+                quadBlack1 = blackR;   // top-right = R
+                quadBlack2 = blackB;   // bottom-left = B
+                quadBlack3 = blackG2;  // bottom-right = G
+                break;
+            case 1:  // RGGB: [R,G; G,B]
+                quadBlack0 = blackR;   // top-left = R
+                quadBlack1 = blackG1;  // top-right = G
+                quadBlack2 = blackG2;  // bottom-left = G
+                quadBlack3 = blackB;   // bottom-right = B
+                break;
+            case 2:  // BGGR: [B,G; G,R]
+                quadBlack0 = blackB;   // top-left = B
+                quadBlack1 = blackG1;  // top-right = G
+                quadBlack2 = blackG2;  // bottom-left = G
+                quadBlack3 = blackR;   // bottom-right = R
+                break;
+            case 3:  // GBRG: [G,B; R,G]
+                quadBlack0 = blackG1;  // top-left = G
+                quadBlack1 = blackB;   // top-right = B
+                quadBlack2 = blackR;   // bottom-left = R
+                quadBlack3 = blackG2;  // bottom-right = G
+                break;
+            default:
+                // Fallback to uniform black level
+                quadBlack0 = quadBlack1 = quadBlack2 = quadBlack3 = meta.black;
+                break;
+        }
+        
+        // Use SetQuadBlacks for per-position black levels
+        negative->SetQuadBlacks(quadBlack0, quadBlack1, quadBlack2, quadBlack3);
         negative->SetWhiteLevel(meta.maximum);
         
-        LOGD("Set levels: black=%u, white=%u", blackLevel, meta.maximum);
+        LOGD("Set quad black levels: [%.1f, %.1f, %.1f, %.1f], white=%u (phase=%d)",
+             quadBlack0, quadBlack1, quadBlack2, quadBlack3, meta.maximum, phase);
         
         // Step 7: Set color information
         setCameraNeutral(*negative, meta);
