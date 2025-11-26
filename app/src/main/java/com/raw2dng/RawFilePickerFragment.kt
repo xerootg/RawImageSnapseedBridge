@@ -374,13 +374,13 @@ class RawFilePickerFragment : Fragment() {
             }
         })
 
-        // Handle convert request from preview dialog - default to DNG
+        // Handle convert request from preview dialog with format selection
         previewDialog.setOnConvertRequestedListener(object : ImagePreviewDialog.OnConvertRequestedListener {
-            override fun onConvertRequested() {
+            override fun onConvertRequested(format: OutputFormat) {
                 val selected = adapter.getSelectedItems()
                 if (selected.isNotEmpty()) {
                     previewDialog.dismiss()
-                    startConversion(selected, OutputFormat.DNG)
+                    startConversion(selected, format)
                 }
             }
         })

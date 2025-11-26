@@ -21,7 +21,7 @@ class ImagePreviewDialog : DialogFragment() {
     }
 
     interface OnConvertRequestedListener {
-        fun onConvertRequested()
+        fun onConvertRequested(format: OutputFormat)
     }
 
     private var imageUris: ArrayList<Uri> = arrayListOf()
@@ -40,7 +40,9 @@ class ImagePreviewDialog : DialogFragment() {
     private lateinit var btnPrevious: ImageButton
     private lateinit var btnNext: ImageButton
     private lateinit var btnSelectImage: ImageButton
-    private lateinit var btnConvertPreview: android.widget.Button
+    private lateinit var btnConvertJpeg: android.widget.Button
+    private lateinit var btnConvertDng: android.widget.Button
+    private lateinit var selectionCountText: TextView
 
     companion object {
         private const val ARG_URIS = "uris"
@@ -177,13 +179,22 @@ class ImagePreviewDialog : DialogFragment() {
             toggleCurrentImageSelection()
         }
 
-        btnConvertPreview = view.findViewById(R.id.btnConvertPreview)
-        btnConvertPreview.setOnClickListener {
+        selectionCountText = view.findViewById(R.id.selectionCountText)
+        btnConvertJpeg = view.findViewById(R.id.btnConvertJpeg)
+        btnConvertDng = view.findViewById(R.id.btnConvertDng)
+        
+        btnConvertJpeg.setOnClickListener {
             if (selectedUris.isNotEmpty()) {
-                convertRequestedListener?.onConvertRequested()
+                convertRequestedListener?.onConvertRequested(OutputFormat.JPEG)
             }
         }
-        updateConvertButton()
+        
+        btnConvertDng.setOnClickListener {
+            if (selectedUris.isNotEmpty()) {
+                convertRequestedListener?.onConvertRequested(OutputFormat.DNG)
+            }
+        }
+        updateConvertButtons()
 
         // Setup thumbnail strip
         setupThumbnailStrip()
@@ -270,18 +281,16 @@ class ImagePreviewDialog : DialogFragment() {
         }
         
         updateSelectionButton()
-        updateConvertButton()
+        updateConvertButtons()
         selectionChangeListener?.onSelectionChanged(currentUri, isNowSelected)
     }
 
-    private fun updateConvertButton() {
+    private fun updateConvertButtons() {
         val count = selectedUris.size
-        btnConvertPreview.isEnabled = count > 0
-        btnConvertPreview.text = if (count > 0) {
-            "Convert ($count)"
-        } else {
-            getString(R.string.convert)
-        }
+        val hasSelection = count > 0
+        btnConvertJpeg.isEnabled = hasSelection
+        btnConvertDng.isEnabled = hasSelection
+        selectionCountText.text = if (count > 0) count.toString() else ""
     }
 
     override fun onStart() {
