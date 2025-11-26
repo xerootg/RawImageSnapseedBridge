@@ -95,28 +95,41 @@ class ImagePagerAdapter(
             val imageWidth = options.outWidth
             val imageHeight = options.outHeight
 
-            // Calculate sample size to avoid OutOfMemory for very large images
-            val maxDimension = 4096
-            var sampleSize = 1
+            // If we got valid dimensions, the OS can read this format
+            if (imageWidth > 0 && imageHeight > 0) {
+                // Calculate sample size to avoid OutOfMemory for very large images
+                val maxDimension = 4096
+                var sampleSize = 1
 
-            if (imageWidth > maxDimension || imageHeight > maxDimension) {
-                val widthRatio = imageWidth.toFloat() / maxDimension
-                val heightRatio = imageHeight.toFloat() / maxDimension
-                sampleSize = kotlin.math.max(widthRatio, heightRatio).toInt()
-            }
+                if (imageWidth > maxDimension || imageHeight > maxDimension) {
+                    val widthRatio = imageWidth.toFloat() / maxDimension
+                    val heightRatio = imageHeight.toFloat() / maxDimension
+                    sampleSize = kotlin.math.max(widthRatio, heightRatio).toInt()
+                }
 
-            // Load the image with the calculated sample size
-            val loadOptions = BitmapFactory.Options().apply {
-                inSampleSize = sampleSize
-                inPreferredConfig = Bitmap.Config.ARGB_8888
-            }
+                // Load the image with the calculated sample size
+                val loadOptions = BitmapFactory.Options().apply {
+                    inSampleSize = sampleSize
+                    inPreferredConfig = Bitmap.Config.ARGB_8888
+                }
 
-            contentResolver.openInputStream(uri)?.use { inputStream ->
-                BitmapFactory.decodeStream(inputStream, null, loadOptions)
+                contentResolver.openInputStream(uri)?.use { inputStream ->
+                    BitmapFactory.decodeStream(inputStream, null, loadOptions)
+                }
+            } else {
+                // OS can't read this format, try native extraction
+                // Use larger size for full preview
+                ThumbnailCache.extractAndCacheThumbnail(context, uri, 2048)
             }
         } catch (e: Exception) {
             e.printStackTrace()
-            null
+            // Try native extraction as fallback
+            try {
+                ThumbnailCache.extractAndCacheThumbnail(context, uri, 2048)
+            } catch (e2: Exception) {
+                e2.printStackTrace()
+                null
+            }
         }
     }
 

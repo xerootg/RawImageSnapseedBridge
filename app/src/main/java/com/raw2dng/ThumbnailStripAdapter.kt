@@ -51,7 +51,8 @@ class ThumbnailStripAdapter(
         // Load thumbnail asynchronously
         val job = CoroutineScope(Dispatchers.Main).launch {
             val bitmap = withContext(Dispatchers.IO) {
-                try {
+                // First try OS thumbnail loading
+                val osBitmap = try {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                         holder.itemView.context.contentResolver.loadThumbnail(
                             uri,
@@ -64,6 +65,9 @@ class ThumbnailStripAdapter(
                 } catch (e: Exception) {
                     null
                 }
+                
+                // If OS couldn't load thumbnail, try native extraction
+                osBitmap ?: ThumbnailCache.extractAndCacheThumbnail(holder.itemView.context, uri, 120)
             }
 
             bitmap?.let {

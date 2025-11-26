@@ -2,6 +2,7 @@
 #include <string>
 #include <android/log.h>
 #include "dng_converter.h"
+#include "libraw_reader.h"
 
 #define LOG_TAG "Raw2DNG_JNI"
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
@@ -58,6 +59,35 @@ Java_com_raw2dng_DNGConverter_getSDKVersion(
 #else
     return env->NewStringUTF("SDK Not Available - Please install Adobe DNG SDK");
 #endif
+}
+
+JNIEXPORT jstring JNICALL
+Java_com_raw2dng_DNGConverter_extractThumbnail(
+        JNIEnv* env,
+        jobject /* this */,
+        jstring inputPath,
+        jstring outputPath) {
+    
+    const char* inputPathStr = env->GetStringUTFChars(inputPath, nullptr);
+    const char* outputPathStr = env->GetStringUTFChars(outputPath, nullptr);
+    
+    LOGD("JNI: Extracting thumbnail from %s to %s", inputPathStr, outputPathStr);
+    
+    std::string errorMessage;
+    bool success = raw2dng::LibRawReader::extractThumbnail(
+        std::string(inputPathStr),
+        std::string(outputPathStr),
+        errorMessage
+    );
+    
+    env->ReleaseStringUTFChars(inputPath, inputPathStr);
+    env->ReleaseStringUTFChars(outputPath, outputPathStr);
+    
+    if (success) {
+        return env->NewStringUTF("");  // Empty string indicates success
+    } else {
+        return env->NewStringUTF(errorMessage.c_str());
+    }
 }
 
 } // extern "C"

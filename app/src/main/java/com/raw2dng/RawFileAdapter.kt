@@ -148,19 +148,34 @@ class RawFileAdapter(
         private suspend fun loadThumbnail(item: RawFileItem): Bitmap? = withContext(Dispatchers.IO) {
             try {
                 val contentResolver = itemView.context.contentResolver
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     // Use loadThumbnail for Android 10+
-                    contentResolver.loadThumbnail(item.uri, Size(128, 128), null)
+                    try {
+                        contentResolver.loadThumbnail(item.uri, Size(128, 128), null)
+                    } catch (e: Exception) {
+                        null
+                    }
                 } else {
                     // For older Android, extract ID from URI and use deprecated method
-                    val id = android.content.ContentUris.parseId(item.uri)
-                    @Suppress("DEPRECATION")
-                    MediaStore.Images.Thumbnails.getThumbnail(
-                        contentResolver,
-                        id,
-                        MediaStore.Images.Thumbnails.MINI_KIND,
+                    try {
+                        val id = android.content.ContentUris.parseId(item.uri)
+                        @Suppress("DEPRECATION")
+                        MediaStore.Images.Thumbnails.getThumbnail(
+                            contentResolver,
+                            id,
+                            MediaStore.Images.Thumbnails.MINI_KIND,
+                            null
+                        )
+                    } catch (e: Exception) {
                         null
-                    )
+                    }
+                }
+                
+                // If OS couldn't load thumbnail, try native extraction
+                if (bitmap == null) {
+                    ThumbnailCache.extractAndCacheThumbnail(itemView.context, item.uri, 128)
+                } else {
+                    bitmap
                 }
             } catch (e: Exception) {
                 null

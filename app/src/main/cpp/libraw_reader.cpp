@@ -265,4 +265,113 @@ void LibRawReader::close() {
     memset(&metadata_, 0, sizeof(metadata_));
 }
 
+bool LibRawReader::extractThumbnail(const std::string& inputPath,
+                                    const std::string& outputPath,
+                                    std::string& errorMessage) {
+    LibRaw processor;
+    
+    LOGD("Extracting thumbnail from: %s", inputPath.c_str());
+    
+    // Open the file
+    int ret = processor.open_file(inputPath.c_str());
+    if (ret != LIBRAW_SUCCESS) {
+        errorMessage = "Failed to open RAW file: " + std::string(libraw_strerror(ret));
+        LOGE("%s", errorMessage.c_str());
+        return false;
+    }
+    
+    // Try to unpack embedded thumbnail
+    ret = processor.unpack_thumb();
+    if (ret == LIBRAW_SUCCESS) {
+        // Write the embedded thumbnail
+        LOGD("Found embedded thumbnail, format: %d, size: %d bytes",
+             processor.imgdata.thumbnail.tformat,
+             processor.imgdata.thumbnail.tlength);
+        
+        ret = processor.dcraw_thumb_writer(outputPath.c_str());
+        if (ret == LIBRAW_SUCCESS) {
+            LOGD("Successfully wrote thumbnail to: %s", outputPath.c_str());
+            processor.recycle();
+            return true;
+        } else {
+            LOGD("dcraw_thumb_writer failed: %s", libraw_strerror(ret));
+        }
+    } else {
+        LOGD("No embedded thumbnail found: %s", libraw_strerror(ret));
+    }
+    
+    // No embedded thumbnail or failed to write it
+    // Generate a preview by processing the RAW data at half size
+    LOGD("Generating preview from RAW data...");
+    
+    processor.recycle();
+    ret = processor.open_file(inputPath.c_str());
+    if (ret != LIBRAW_SUCCESS) {
+        errorMessage = "Failed to reopen RAW file";
+        return false;
+    }
+    
+    ret = processor.unpack();
+    if (ret != LIBRAW_SUCCESS) {
+        errorMessage = "Failed to unpack RAW data: " + std::string(libraw_strerror(ret));
+        LOGE("%s", errorMessage.c_str());
+        processor.recycle();
+        return false;
+    }
+    
+    // Configure for fast preview generation
+    processor.imgdata.params.half_size = 1;      // Half resolution for speed
+    processor.imgdata.params.use_camera_wb = 1;  // Use camera white balance
+    processor.imgdata.params.output_bps = 8;     // 8-bit output
+    processor.imgdata.params.user_qual = 0;      // Fastest interpolation (linear)
+    
+    ret = processor.dcraw_process();
+    if (ret != LIBRAW_SUCCESS) {
+        errorMessage = "Failed to process RAW data: " + std::string(libraw_strerror(ret));
+        LOGE("%s", errorMessage.c_str());
+        processor.recycle();
+        return false;
+    }
+    
+    // Write as PPM first, then we'd need to convert to JPEG
+    // Actually, dcraw_ppm_tiff_writer can write the processed image
+    // But for thumbnails, let's write as PPM and handle it
+    // Actually, the easiest is to write to a temp PPM and convert
+    // But that's complex. Let's just write the PPM directly for now
+    // and handle the format in Kotlin (Android can read PPM files indirectly)
+    
+    // Actually, let's use libraw_processed_image_t which gives us RGB data
+    libraw_processed_image_t* image = processor.dcraw_make_mem_image(&ret);
+    if (ret != LIBRAW_SUCCESS || image == nullptr) {
+        errorMessage = "Failed to create memory image: " + std::string(libraw_strerror(ret));
+        LOGE("%s", errorMessage.c_str());
+        processor.recycle();
+        return false;
+    }
+    
+    LOGD("Generated preview: %dx%d, %d bits, %d colors, %d bytes",
+         image->width, image->height, image->bits, image->colors, image->data_size);
+    
+    // Write as PPM file (simple format that Android BitmapFactory can read)
+    FILE* fp = fopen(outputPath.c_str(), "wb");
+    if (!fp) {
+        errorMessage = "Failed to open output file for writing";
+        LOGE("%s", errorMessage.c_str());
+        processor.dcraw_clear_mem(image);
+        processor.recycle();
+        return false;
+    }
+    
+    // Write PPM header (P6 = binary RGB)
+    fprintf(fp, "P6\n%d %d\n255\n", image->width, image->height);
+    fwrite(image->data, 1, image->data_size, fp);
+    fclose(fp);
+    
+    LOGD("Successfully wrote preview to: %s", outputPath.c_str());
+    
+    processor.dcraw_clear_mem(image);
+    processor.recycle();
+    return true;
+}
+
 } // namespace raw2dng

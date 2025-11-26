@@ -9,6 +9,9 @@ class DNGConverter {
         init {
             System.loadLibrary("raw2dng")
         }
+        
+        // Singleton instance for thumbnail extraction
+        val instance = DNGConverter()
     }
 
     /**
@@ -18,6 +21,14 @@ class DNGConverter {
      * @return Empty string if successful, error message otherwise
      */
     external fun convertToDNG(inputPath: String, outputPath: String): String
+
+    /**
+     * Extract or generate a thumbnail/preview from a RAW file
+     * @param inputPath Path to input RAW file  
+     * @param outputPath Path for output JPEG/PPM file
+     * @return Empty string if successful, error message otherwise
+     */
+    external fun extractThumbnail(inputPath: String, outputPath: String): String
 
     /**
      * Check if Adobe DNG SDK is available

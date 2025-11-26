@@ -85,6 +85,13 @@ public:
     
     // Clean up and release resources
     void close();
+    
+    // Static method to extract embedded thumbnail from a RAW file
+    // Writes a JPEG file to outputPath
+    // Returns true on success, false on failure (sets errorMessage)
+    static bool extractThumbnail(const std::string& inputPath, 
+                                 const std::string& outputPath,
+                                 std::string& errorMessage);
 
 private:
     std::unique_ptr<LibRaw> processor_;
