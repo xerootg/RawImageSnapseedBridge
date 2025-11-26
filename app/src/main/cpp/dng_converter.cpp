@@ -1,7 +1,9 @@
 #include "dng_converter.h"
+#include "libraw_to_dng.h"
 #include <android/log.h>
 #include <fstream>
 #include <cstring>
+#include <algorithm>
 
 #define LOG_TAG "DNGConverter"
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
@@ -28,6 +30,53 @@
 #  endif
 #endif
 
+// Helper to check file extension
+static bool hasExtension(const std::string& path, const std::string& ext) {
+    if (path.length() < ext.length()) return false;
+    std::string pathExt = path.substr(path.length() - ext.length());
+    std::transform(pathExt.begin(), pathExt.end(), pathExt.begin(), ::tolower);
+    std::string lowerExt = ext;
+    std::transform(lowerExt.begin(), lowerExt.end(), lowerExt.begin(), ::tolower);
+    return pathExt == lowerExt;
+}
+
+// Check if file is a proprietary RAW format (not DNG)
+static bool isProprietaryRaw(const std::string& path) {
+    // Common proprietary RAW extensions
+    static const char* rawExtensions[] = {
+        ".nef",  // Nikon
+        ".cr2",  // Canon
+        ".cr3",  // Canon (newer)
+        ".arw",  // Sony
+        ".raf",  // Fujifilm
+        ".orf",  // Olympus
+        ".rw2",  // Panasonic
+        ".pef",  // Pentax
+        ".srw",  // Samsung
+        ".raw",  // Various
+        ".3fr",  // Hasselblad
+        ".mef",  // Mamiya
+        ".mrw",  // Minolta
+        ".nrw",  // Nikon (Coolpix)
+        ".rwl",  // Leica
+        ".x3f",  // Sigma
+        ".erf",  // Epson
+        ".kdc",  // Kodak
+        ".dcr",  // Kodak
+        ".dcs",  // Kodak
+        ".fff",  // Hasselblad
+        ".iiq",  // Phase One
+        nullptr
+    };
+    
+    for (int i = 0; rawExtensions[i] != nullptr; i++) {
+        if (hasExtension(path, rawExtensions[i])) {
+            return true;
+        }
+    }
+    return false;
+}
+
 bool DNGConverter::isDNGSDKAvailable() {
 #ifdef HAS_DNG_SDK
     return true;
@@ -38,16 +87,24 @@ bool DNGConverter::isDNGSDKAvailable() {
 
 bool DNGConverter::convertToDNG(const std::string& inputPath, const std::string& outputPath, std::string& errorMessage) {
     LOGD("Converting %s to %s", inputPath.c_str(), outputPath.c_str());
+    
+    // Check if this is a proprietary RAW format - use LibRaw to convert
+    if (isProprietaryRaw(inputPath)) {
+        LOGD("Detected proprietary RAW format, using LibRaw for conversion");
+        return raw2dng::convertRawToDNG(inputPath, outputPath, errorMessage);
+    }
 
 #ifdef HAS_DNG_SDK
     try {
         // Initialize DNG SDK
+        #if qDNGUseXMP
         dng_xmp_sdk::InitializeSDK();
+        #endif
 
         // Create a DNG host
         dng_host host;
 
-        // Open the input RAW file
+        // Open the input DNG file
         dng_file_stream stream(inputPath.c_str());
 
         // Read the file information
@@ -55,13 +112,25 @@ bool DNGConverter::convertToDNG(const std::string& inputPath, const std::string&
         info.Parse(host, stream);
         info.PostParse(host);
 
+        // The DNG SDK can only parse DNG files, not proprietary RAW formats
+        // This check is a fallback in case file extension was misleading
         if (!info.IsValidDNG()) {
-            LOGD("File is not a valid DNG, attempting to read as proprietary RAW");
+            LOGD("Not a valid DNG, attempting LibRaw conversion as fallback");
+            return raw2dng::convertRawToDNG(inputPath, outputPath, errorMessage);
         }
 
         // Create the negative
         AutoPtr<dng_negative> negative;
         negative.Reset(host.Make_dng_negative());
+
+        // Check if negative was created successfully
+        if (!negative.Get()) {
+            LOGE("Failed to create dng_negative object");
+            errorMessage = "Failed to create DNG negative object";
+            return false;
+        }
+        
+        LOGD("Created dng_negative object at %p", negative.Get());
 
         // Parse the negative
         negative->Parse(host, stream, info);
@@ -78,7 +147,9 @@ bool DNGConverter::convertToDNG(const std::string& inputPath, const std::string&
         writer.WriteDNG(host, outputStream, *negative.Get());
 
         // Clean up
+        #if qDNGUseXMP
         dng_xmp_sdk::TerminateSDK();
+        #endif
 
         LOGD("Conversion successful");
         return true;

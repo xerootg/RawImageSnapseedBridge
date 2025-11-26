@@ -3,6 +3,7 @@
     <string name="app_name">Raw2DNG</string>
     <string name="select_files">Select RAW Files</string>
     <string name="convert">Convert to DNG</string>
+    <string name="clear_folder">Clear Raw2DNG Folder</string>
     <string name="status">Status:</string>
     <string name="idle">Idle</string>
     <string name="converting">Converting %1$d of %2$d</string>
@@ -11,4 +12,38 @@
     <string name="select_raw_files">Select RAW files (CR2, ARW, etc.)</string>
     <string name="no_files_selected">No files selected</string>
     <string name="files_selected">%1$d file(s) selected</string>
+    <string name="clear_folder_confirm">Delete all %1$d DNG files from Pictures/Raw2DNG?</string>
+    <string name="folder_cleared">Cleared %1$d files from Raw2DNG folder</string>
+    <string name="folder_empty">Raw2DNG folder is already empty</string>
+    <string name="tab_convert">Convert</string>
+    <string name="tab_gallery">Gallery</string>
+    <string name="gallery_empty">No converted images yet</string>
+    <string name="gallery_file_count">%1$d images in Raw2DNG</string>
+    <string name="open_with">Open with…</string>
+    
+    <!-- RAW File Picker -->
+    <string name="raw_file_thumbnail">RAW file thumbnail</string>
+    <string name="converted">CONVERTED</string>
+    <string name="show_all">Show All</string>
+    <string name="hide_converted">Hide Converted</string>
+    <string name="no_raw_files_found">No RAW files found</string>
+    <string name="select_all">Select All</string>
+    <string name="convert_selected">Convert Selected</string>
+    <string name="files_found">%1$d RAW files found</string>
+    <string name="files_selected_of">%1$d of %2$d selected</string>
+    <string name="loading_files">Loading RAW files…</string>
+    <string name="permission_required">Storage permission required to browse files</string>
+    <string name="image_preview">Image preview</string>
+    <string name="close_preview">Close preview</string>
+    <string name="zoom_in">Zoom in</string>
+    <string name="zoom_out">Zoom out</string>
+    <string name="fit_to_screen">Fit to screen</string>
+    <string name="thumbnail">Thumbnail</string>
+    <string name="previous_image">Previous image</string>
+    <string name="next_image">Next image</string>
+    <string name="select_image">Select image</string>
+    <string name="deselect_image">Deselect image</string>
+    <string name="converting_files">Converting Files…</string>
+    <string name="done">Done</string>
+    <string name="view_gallery">View Gallery</string>
 </resources>

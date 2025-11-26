@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/thumbnailContainer"
+    android:layout_width="60dp"
+    android:layout_height="60dp"
+    android:layout_margin="4dp">
+
+    <ImageView
+        android:id="@+id/thumbnail"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="centerCrop"
+        android:background="#333333"
+        android:contentDescription="@string/thumbnail" />
+
+    <View
+        android:id="@+id/selectionBorder"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/thumbnail_strip_selected_border"
+        android:visibility="gone" />
+
+</FrameLayout>

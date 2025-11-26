@@ -1,0 +1,21 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            // "includePath": [
+            //     "${workspaceFolder}/**"
+            // ],
+            "defines": [],
+            "compilerPath": "/usr/bin/gcc",
+            "cStandard": "c17",
+            "cppStandard": "gnu++17",
+            "intelliSenseMode": "linux-gcc-x64",
+            "compileCommands": "${workspaceFolder}/app/.cxx/tools/debug/arm64-v8a/compile_commands.json",
+            // The Microsoft C/C++ extension does NOT remap absolute paths inside compile_commands.json.
+            // To avoid post-processing either:
+            //  - run VS Code + the C/C++ extension inside the container (Remote - Containers) so /workspace paths are valid, or
+            //  - generate a compile_commands.json with host paths (or create a /workspace symlink to your workspace folder).
+        }
+    ],
+    "version": 4
+}

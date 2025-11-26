@@ -9,7 +9,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Set environment variables for Android SDK
 ENV ANDROID_HOME=/opt/android-sdk
 ENV ANDROID_SDK_ROOT=/opt/android-sdk
-ENV ANDROID_NDK_VERSION=25.2.9519653
+ENV ANDROID_NDK_VERSION=25.1.8937393
 ENV ANDROID_NDK_HOME=${ANDROID_HOME}/ndk/${ANDROID_NDK_VERSION}
 ENV PATH=${PATH}:${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools:${ANDROID_HOME}/build-tools/34.0.0
 
@@ -44,7 +44,7 @@ RUN yes | sdkmanager --licenses || true
 RUN sdkmanager --install \
     "platform-tools" \
     "platforms;android-34" \
-    "build-tools;34.0.0" \
+    "build-tools;33.0.1" \
     "ndk;${ANDROID_NDK_VERSION}" \
     "cmake;3.22.1"
 

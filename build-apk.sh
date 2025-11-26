@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Build script for Raw2DNG Android APK
-# This script builds both debug and release APKs
+# This script builds both debug and release APKs (release only if CONFIGURATION=Release)
 
 set -e  # Exit on error
 
@@ -29,13 +29,6 @@ DNG_SDK_FILES=$(find "$DNG_SDK_DIR" -name "dng_*.cpp" 2>/dev/null | wc -l)
 
 echo "Checking Adobe DNG SDK..."
 
-# Apply patches if needed
-if [ -f "patch-dng-sdk.sh" ] && [ "$DNG_SDK_FILES" -gt 0 ]; then
-    echo "Applying DNG SDK patches..."
-    ./patch-dng-sdk.sh || echo -e "${YELLOW}Warning: Patch script failed, continuing anyway${NC}"
-    echo ""
-fi
-
 if [ "$DNG_SDK_FILES" -eq 0 ]; then
     echo -e "${YELLOW}WARNING: Adobe DNG SDK not found!${NC}"
     echo "The app will build but only create placeholder DNG files."
@@ -61,18 +54,23 @@ echo "Starting build..."
 echo ""
 
 # Clean previous builds (optional, comment out for faster incremental builds)
-echo "Cleaning previous builds..."
-./gradlew clean || true
+#echo "Cleaning previous builds..."
+#./gradlew clean || true
 
 # Build debug APK
 echo ""
 echo "Building debug APK..."
 ./gradlew assembleDebug
 
-# Build release APK (unsigned)
-echo ""
-echo "Building release APK..."
-./gradlew assembleRelease || echo -e "${YELLOW}Note: Release APK build skipped or failed (signing required)${NC}"
+# Build release APK (unsigned) only if CONFIGURATION=Release
+if [[ "$CONFIGURATION" == "Release" ]]; then
+    echo ""
+    echo "Building release APK..."
+    ./gradlew assembleRelease || echo -e "${YELLOW}Note: Release APK build skipped or failed (signing required)${NC}"
+else
+    echo ""
+    echo -e "${YELLOW}Skipping release build (CONFIGURATION != 'Release').${NC}"
+fi
 
 # Create output directory
 mkdir -p output
@@ -90,7 +88,7 @@ if [ -f "app/build/outputs/apk/debug/app-debug.apk" ]; then
     echo "  Size: $DEBUG_SIZE"
 fi
 
-if [ -f "app/build/outputs/apk/release/app-release-unsigned.apk" ]; then
+if [[ "$CONFIGURATION" == "Release" ]] && [ -f "app/build/outputs/apk/release/app-release-unsigned.apk" ]; then
     cp app/build/outputs/apk/release/app-release-unsigned.apk output/
     echo -e "${GREEN}✓ Release APK: output/app-release-unsigned.apk${NC}"
 

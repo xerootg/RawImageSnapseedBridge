@@ -51,16 +51,26 @@
         app:layout_constraintTop_toBottomOf="@+id/selectedFilesText"
         android:layout_marginTop="16dp" />
 
+    <Button
+        android:id="@+id/clearFolderButton"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:text="@string/clear_folder"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/convertButton"
+        android:layout_marginTop="8dp" />
+
     <ProgressBar
         android:id="@+id/progressBar"
         style="?android:attr/progressBarStyleHorizontal"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginTop="32dp"
+        android:layout_marginTop="16dp"
         android:visibility="gone"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/convertButton" />
+        app:layout_constraintTop_toBottomOf="@+id/clearFolderButton" />
 
     <TextView
         android:id="@+id/statusText"
