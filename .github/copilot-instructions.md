@@ -81,11 +81,14 @@ com.raw2dng/
 ├── GalleryAdapter.kt         # RecyclerView adapter with multi-select
 ├── GalleryItem.kt            # Data class for gallery items
 │
-├── ConversionQueue.kt        # Manages parallel conversion jobs
+├── ConversionQueue.kt        # Manages sequential conversion jobs
+├── ConversionThumbnailAdapter.kt # Adapter for conversion progress thumbnails
 ├── ConvertedFilesHelper.kt   # Checks conversion status by file existence
 ├── OutputFormat.kt           # Enum: DNG, JPEG
 │
+├── ThumbnailCache.kt         # LRU cache for RAW thumbnails extracted via LibRaw
 ├── DNGConverter.kt           # JNI bridge to native code
+├── ImagePreviewDialog.kt     # Fullscreen preview dialog with selection
 └── FullscreenImageActivity.kt # Fullscreen RAW preview
 ```
 
@@ -122,14 +125,36 @@ RawFilePickerFragment.loadRawFiles()
 #### Conversion Flow
 ```
 RawFilePickerFragment.startConversion()
+  → Create ConversionThumbnailItem list from selected files
+  → Show conversion overlay with thumbnail grid
   → ConversionQueue.addTask(uri, format)
-  → DNGConverter.convertToDNG() [JNI]
-  → native dng_converter.cpp
-    → libraw_reader reads RAW data
-    → libraw_to_dng creates DNG (if format includes DNG)
-    → jpeg_converter creates JPEG (if format includes JPEG)
-  → File written to Pictures/Raw2DNG/ or Pictures/Raw2DNG/JPEG/
+  → For each task:
+    → onProgress callback marks item as IN_PROGRESS
+    → DNGConverter.convertToDNG() [JNI]
+    → native dng_converter.cpp
+      → libraw_reader reads RAW data
+      → libraw_to_dng creates DNG (if format includes DNG)
+      → jpeg_converter creates JPEG (if format includes JPEG)
+    → onTaskComplete callback:
+      → Mark item SUCCESS or ERROR in thumbnail grid
+      → Increment global progress bar
+      → File written to Pictures/Raw2DNG/ or Pictures/Raw2DNG/JPEG/
   → MediaScanner notified
+  → onAllComplete enables Done button
+```
+
+#### Conversion Progress UI
+```
+ConversionThumbnailAdapter
+  → ConversionThumbnailItem (uri, fileName, status, errorMessage)
+  → ConversionItemStatus: PENDING, IN_PROGRESS, SUCCESS, ERROR
+  → Displays 3-column grid of thumbnails with status overlays:
+    - PENDING: Dark overlay (50% opacity)
+    - IN_PROGRESS: Darker overlay (70%) + spinning progress indicator
+    - SUCCESS: Light overlay (30%) + green checkmark
+    - ERROR: Medium overlay (60%) + red error icon
+  → Global progress bar at bottom with "X/Y" count
+  → Thumbnail loading: OS ContentResolver → ThumbnailCache fallback
 ```
 
 #### Gallery Refresh
@@ -174,7 +199,8 @@ RawFilePickerFragment.onResume()
 4. **Camera Color Matrices**: Applies camera-specific color matrices for accurate colors
 5. **Filter-Specific Clear**: Gallery clear button respects current filter (DNG/JPEG/All)
 6. **Multi-Select**: Long-press enables multi-select for batch operations
-7. **Parallel Conversion**: ConversionQueue processes files concurrently
+7. **Sequential Conversion**: ConversionQueue processes files one at a time
+8. **Conversion Progress Grid**: Visual thumbnail grid showing per-file conversion status
 
 ### Color Matrix Handling
 
@@ -200,6 +226,7 @@ When making changes, verify:
 - [ ] Gallery shows correct files per filter
 - [ ] Clear folder respects current filter
 - [ ] Conversion badges update after gallery changes
+- [ ] Conversion progress grid shows correct status per file
 - [ ] Multi-select works in gallery
 - [ ] "Open in..." works for selected files
 

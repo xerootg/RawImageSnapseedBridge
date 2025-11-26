@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_margin="2dp">
+
+    <androidx.cardview.widget.CardView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        app:cardCornerRadius="8dp"
+        app:cardElevation="2dp">
+
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <!-- Thumbnail image - square aspect ratio -->
+            <ImageView
+                android:id="@+id/conversionThumbnail"
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:scaleType="centerCrop"
+                android:src="@drawable/ic_raw_file"
+                android:contentDescription="@string/raw_file_thumbnail"
+                app:layout_constraintDimensionRatio="1:1"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent" />
+
+            <!-- Semi-transparent overlay for progress -->
+            <View
+                android:id="@+id/progressOverlay"
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:background="#80000000"
+                android:visibility="visible"
+                app:layout_constraintBottom_toBottomOf="@id/conversionThumbnail"
+                app:layout_constraintEnd_toEndOf="@id/conversionThumbnail"
+                app:layout_constraintStart_toStartOf="@id/conversionThumbnail"
+                app:layout_constraintTop_toTopOf="@id/conversionThumbnail" />
+
+            <!-- Circular progress indicator -->
+            <ProgressBar
+                android:id="@+id/itemProgressBar"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:indeterminate="true"
+                android:visibility="gone"
+                app:layout_constraintBottom_toBottomOf="@id/conversionThumbnail"
+                app:layout_constraintEnd_toEndOf="@id/conversionThumbnail"
+                app:layout_constraintStart_toStartOf="@id/conversionThumbnail"
+                app:layout_constraintTop_toTopOf="@id/conversionThumbnail" />
+
+            <!-- Status icon (checkmark or error) -->
+            <ImageView
+                android:id="@+id/statusIcon"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:visibility="gone"
+                android:contentDescription="@string/status"
+                app:layout_constraintBottom_toBottomOf="@id/conversionThumbnail"
+                app:layout_constraintEnd_toEndOf="@id/conversionThumbnail"
+                app:layout_constraintStart_toStartOf="@id/conversionThumbnail"
+                app:layout_constraintTop_toTopOf="@id/conversionThumbnail" />
+
+            <!-- File name at bottom -->
+            <TextView
+                android:id="@+id/fileName"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:background="#99000000"
+                android:ellipsize="middle"
+                android:maxLines="1"
+                android:padding="4dp"
+                android:textColor="@android:color/white"
+                android:textSize="10sp"
+                app:layout_constraintBottom_toBottomOf="@id/conversionThumbnail"
+                app:layout_constraintEnd_toEndOf="@id/conversionThumbnail"
+                app:layout_constraintStart_toStartOf="@id/conversionThumbnail" />
+
+        </androidx.constraintlayout.widget.ConstraintLayout>
+
+    </androidx.cardview.widget.CardView>
+
+</FrameLayout>

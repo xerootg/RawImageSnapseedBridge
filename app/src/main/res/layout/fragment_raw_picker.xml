@@ -142,11 +142,14 @@
         android:background="?android:colorBackground"
         android:visibility="gone">
 
+        <!-- Header with title -->
         <TextView
             android:id="@+id/conversionTitle"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:padding="16dp"
+            android:paddingStart="16dp"
+            android:paddingTop="16dp"
+            android:paddingEnd="16dp"
             android:text="@string/converting_files"
             android:textSize="18sp"
             android:textStyle="bold"
@@ -155,49 +158,51 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent" />
 
-        <ProgressBar
-            android:id="@+id/conversionProgressBar"
-            style="?android:attr/progressBarStyleHorizontal"
+        <!-- Thumbnail grid -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/conversionThumbnailGrid"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="16dp"
-            android:layout_marginEnd="16dp"
+            android:layout_height="0dp"
+            android:layout_margin="8dp"
+            android:clipToPadding="false"
+            android:padding="4dp"
+            app:layout_constraintBottom_toTopOf="@id/progressContainer"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/conversionTitle" />
 
-        <TextView
-            android:id="@+id/conversionStatus"
+        <!-- Global progress bar with count overlay - now above Done button -->
+        <FrameLayout
+            android:id="@+id/progressContainer"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:padding="16dp"
-            android:text="@string/idle"
-            android:textAlignment="center"
-            android:textColor="?colorOnBackground"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/conversionProgressBar" />
-
-        <ScrollView
-            android:id="@+id/conversionLogScrollView"
-            android:layout_width="0dp"
-            android:layout_height="0dp"
-            android:layout_margin="16dp"
+            android:layout_marginStart="16dp"
+            android:layout_marginEnd="16dp"
+            android:layout_marginBottom="8dp"
             app:layout_constraintBottom_toTopOf="@id/btnDone"
             app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/conversionStatus">
+            app:layout_constraintStart_toStartOf="parent">
+
+            <ProgressBar
+                android:id="@+id/conversionProgressBar"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="match_parent"
+                android:layout_height="36dp"
+                android:max="100"
+                android:progress="0"
+                android:progressDrawable="@drawable/progress_bar_green" />
 
             <TextView
-                android:id="@+id/conversionLogText"
+                android:id="@+id/conversionStatus"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:fontFamily="monospace"
-                android:textSize="12sp"
-                android:padding="8dp"
-                android:textColor="?colorOnSurfaceVariant"
-                android:background="?colorSurfaceVariant" />
-        </ScrollView>
+                android:layout_height="36dp"
+                android:gravity="center"
+                android:text="@string/idle"
+                android:textColor="#1B5E20"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+        </FrameLayout>
 
         <Button
             android:id="@+id/btnDone"

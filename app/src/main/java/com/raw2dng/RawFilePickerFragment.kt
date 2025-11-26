@@ -17,6 +17,7 @@ import android.view.ViewGroup
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
+import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.raw2dng.databinding.FragmentRawPickerBinding
 import kotlinx.coroutines.Dispatchers
@@ -24,7 +25,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
-import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
@@ -51,6 +51,7 @@ class RawFilePickerFragment : Fragment() {
     // Conversion
     private val converter = DNGConverter()
     private var conversionQueue: ConversionQueue? = null
+    private lateinit var conversionThumbnailAdapter: ConversionThumbnailAdapter
 
     // Supported RAW extensions (case-insensitive)
     private val rawExtensions = setOf(
@@ -195,6 +196,11 @@ class RawFilePickerFragment : Fragment() {
             // Reset the view for next time
             showPickerContent()
         }
+        
+        // Setup conversion thumbnail grid
+        conversionThumbnailAdapter = ConversionThumbnailAdapter()
+        binding.conversionThumbnailGrid.layoutManager = GridLayoutManager(requireContext(), 3)
+        binding.conversionThumbnailGrid.adapter = conversionThumbnailAdapter
     }
 
     private fun loadRawFiles() {
@@ -399,15 +405,26 @@ class RawFilePickerFragment : Fragment() {
         // Show conversion overlay
         showConversionOverlay()
 
-        binding.conversionProgressBar.max = selectedFiles.size
+        val fileCount = selectedFiles.size
+        binding.conversionProgressBar.max = fileCount
         binding.conversionProgressBar.progress = 0
+        binding.conversionStatus.text = "0/$fileCount"
         binding.btnDone.isEnabled = false
+        
+        // Populate the thumbnail grid with selected files
+        val thumbnailItems = selectedFiles.map { rawFile ->
+            ConversionThumbnailItem(
+                uri = rawFile.uri,
+                fileName = rawFile.name,
+                status = ConversionItemStatus.PENDING
+            )
+        }
+        conversionThumbnailAdapter.setItems(thumbnailItems)
         
         val formatName = if (outputFormat == OutputFormat.DNG) "DNG" else "JPEG"
         val extension = if (outputFormat == OutputFormat.DNG) "dng" else "jpg"
 
-        logMessage("Starting $formatName conversion of ${selectedFiles.size} file(s)...")
-        logMessage("Output directory: Pictures/Raw2DNG")
+        Log.d(tag, "Starting $formatName conversion of $fileCount file(s)...")
 
         val tasks = selectedFiles.mapNotNull { rawFile ->
             try {
@@ -419,46 +436,51 @@ class RawFilePickerFragment : Fragment() {
                 ConversionTask(rawFile.uri, inputPath, outputPath, fileName, outputFormat)
             } catch (e: Exception) {
                 Log.e(tag, "Error preparing task for ${rawFile.uri}", e)
-                logMessage("Error: ${e.message}")
+                // Mark as error in thumbnail grid
+                conversionThumbnailAdapter.markError(rawFile.uri, e.message ?: "Unknown error")
                 null
             }
         }
 
         conversionQueue = ConversionQueue(
             converter = converter,
-            onProgress = { current, total ->
+            onProgress = { current, _ ->
                 activity?.runOnUiThread {
-                    binding.conversionProgressBar.progress = current
-                    binding.conversionStatus.text = getString(R.string.converting, current, total)
+                    // Mark the current item as in-progress (progress bar increments on completion)
+                    if (current <= tasks.size) {
+                        val task = tasks.getOrNull(current - 1)
+                        task?.let {
+                            conversionThumbnailAdapter.markInProgress(it.inputUri)
+                        }
+                    }
                 }
             },
             onTaskComplete = { result ->
                 activity?.runOnUiThread {
+                    // Update progress bar on completion
+                    val completed = conversionThumbnailAdapter.getCompletedCount() + 1
+                    binding.conversionProgressBar.progress = completed
+                    binding.conversionStatus.text = "$completed/$fileCount"
+                    
                     if (result.success) {
                         val outputFile = File(result.task.outputPath)
-                        val finalUri = saveToPublicStorage(outputFile, result.task.outputFormat)
+                        saveToPublicStorage(outputFile, result.task.outputFormat)
                         outputFile.delete()
                         
-                        val ext = if (result.task.outputFormat == OutputFormat.DNG) "dng" else "jpg"
-
-                        if (finalUri != null) {
-                            val outputName = result.task.fileName.substringBeforeLast('.') + ".$ext"
-                            logMessage("✓ ${result.task.fileName} -> $outputName")
-                        } else {
-                            logMessage("✓ ${result.task.fileName} (warning: couldn't add to gallery)")
-                        }
+                        // Mark success in thumbnail grid
+                        conversionThumbnailAdapter.markSuccess(result.task.inputUri)
+                        Log.d(tag, "✓ ${result.task.fileName}")
                     } else {
-                        logMessage("✗ ${result.task.fileName}: ${result.errorMessage}")
+                        // Mark error in thumbnail grid
+                        conversionThumbnailAdapter.markError(result.task.inputUri, result.errorMessage)
+                        Log.e(tag, "✗ ${result.task.fileName}: ${result.errorMessage}")
                     }
                 }
             },
             onAllComplete = { successful, failed ->
                 activity?.runOnUiThread {
-                    val message = "Completed: $successful successful, $failed failed"
+                    val message = getString(R.string.conversion_complete, successful, failed)
                     binding.conversionStatus.text = message
-                    logMessage(message)
-                    logMessage("Output files saved to: Pictures/Raw2DNG")
-
                     binding.btnDone.isEnabled = true
                     
                     // Clear selection and reload files to update converted status
@@ -478,29 +500,12 @@ class RawFilePickerFragment : Fragment() {
     private fun showConversionOverlay() {
         binding.pickerContent.visibility = View.GONE
         binding.conversionOverlay.visibility = View.VISIBLE
-        binding.conversionLogText.text = ""
+        conversionThumbnailAdapter.clear()
     }
 
     private fun showPickerContent() {
         binding.conversionOverlay.visibility = View.GONE
         binding.pickerContent.visibility = View.VISIBLE
-    }
-
-    private fun logMessage(message: String) {
-        Log.d(tag, message)
-        activity?.runOnUiThread {
-            val timestamp = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
-            val currentLog = binding.conversionLogText.text.toString()
-            binding.conversionLogText.text = if (currentLog.isEmpty()) {
-                "[$timestamp] $message"
-            } else {
-                "$currentLog\n[$timestamp] $message"
-            }
-
-            binding.conversionLogScrollView.post {
-                binding.conversionLogScrollView.fullScroll(View.FOCUS_DOWN)
-            }
-        }
     }
 
     private fun copyUriToCache(uri: Uri, fileName: String): String {
