@@ -109,6 +109,8 @@
     <string name="snapseed_label">Open single DNG in Snapseed on completion</string>
     <string name="snapseed_hint">Instead of navigating to Gallery, open the converted file in Snapseed</string>
     <string name="snapseed_not_installed">Snapseed is not installed</string>
+    <string name="share_jpeg_label">Share single JPEG on completion</string>
+    <string name="share_jpeg_hint">Instead of navigating to Gallery, prompt to share the converted JPEG</string>
     
     <!-- JPEG Settings -->
     <string name="jpeg_settings_label">JPEG conversion defaults</string>

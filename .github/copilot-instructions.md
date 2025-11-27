@@ -480,6 +480,11 @@ SettingsFragment.kt (Tab: Settings)
 │   ├── Only triggers for single-file DNG conversions that complete successfully
 │   └── Auto-saved via KEY_OPEN_IN_SNAPSEED (Boolean, default: false)
 │
+├── Share Single JPEG on Completion (checkbox)
+│   ├── When checked: single JPEG conversions prompt Android share sheet instead of Gallery
+│   ├── Only triggers for single-file JPEG conversions that complete successfully
+│   └── Auto-saved via KEY_SHARE_SINGLE_JPEG (Boolean, default: false)
+│
 ├── JPEG Quality Settings (button → JpegSettingsDialog)
 │   ├── Quality: SeekBar 1-100 (default: 95)
 │   ├── Chroma Subsampling: RadioGroup
@@ -513,6 +518,7 @@ SharedPreferences Keys:
   KEY_ENABLED_RAW_TYPES = "enabled_raw_types" (StringSet, default: all)
   KEY_HIDE_CONVERTED = "hide_converted_images" (Boolean, default: true)
   KEY_OPEN_IN_SNAPSEED = "open_single_dng_in_snapseed" (Boolean, default: false)
+  KEY_SHARE_SINGLE_JPEG = "share_single_jpeg_on_completion" (Boolean, default: false)
   KEY_JPEG_QUALITY = "jpeg_quality" (Int, default: 95)
   KEY_JPEG_CHROMA = "jpeg_chroma_subsampling" (Int, default: 0 = 4:4:4)
   KEY_JPEG_OPTIMIZE = "jpeg_optimize_coding" (Boolean, default: true)
@@ -719,6 +725,10 @@ When making changes, verify:
 - [ ] Single DNG conversion opens Snapseed when enabled and Snapseed installed
 - [ ] Multi-file DNG conversion does NOT open Snapseed (navigates to Gallery instead)
 - [ ] JPEG conversion does NOT trigger Snapseed opening
+- [ ] Share JPEG setting persists across app restarts
+- [ ] Single JPEG conversion opens share sheet when enabled
+- [ ] Multi-file JPEG conversion does NOT trigger share (navigates to Gallery instead)
+- [ ] DNG conversion does NOT trigger share sheet
 - [ ] Regenerate button appears in Gallery multi-select mode
 - [ ] Regenerate dialog shows format selection and JPEG settings
 - [ ] JPEG settings panel shows/hides based on format selection

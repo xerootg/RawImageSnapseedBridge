@@ -125,6 +125,25 @@
             android:layout_marginStart="32dp"
             android:layout_marginTop="4dp" />
 
+        <!-- Share single JPEG setting -->
+        <CheckBox
+            android:id="@+id/chkShareJpeg"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/share_jpeg_label"
+            android:checked="false"
+            android:layout_marginTop="16dp" />
+
+        <TextView
+            android:id="@+id/txtShareJpegHint"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/share_jpeg_hint"
+            android:textSize="12sp"
+            android:textColor="?android:attr/textColorSecondary"
+            android:layout_marginStart="32dp"
+            android:layout_marginTop="4dp" />
+
         <!-- JPEG quality settings -->
         <View
             android:layout_width="match_parent"

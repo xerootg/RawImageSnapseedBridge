@@ -50,6 +50,7 @@ class RawFilePickerFragment : Fragment() {
     private var conversionCompletedSuccessfully = false  // Track if all conversions succeeded
     private var conversionWarningCount = 0  // Track warnings (e.g., couldn't overwrite)
     private var lastConvertedDngUri: Uri? = null  // Track URI for single DNG conversion (Snapseed)
+    private var lastConvertedJpegUri: Uri? = null  // Track URI for single JPEG conversion (Share)
     private var conversionFileCount = 0  // Track number of files in current conversion
     private val PREFS_NAME = "raw2dng_prefs"
     private val KEY_AUTO_NAVIGATE = "auto_navigate_gallery"
@@ -531,6 +532,7 @@ class RawFilePickerFragment : Fragment() {
         conversionCompletedSuccessfully = false
         conversionWarningCount = 0
         lastConvertedDngUri = null
+        lastConvertedJpegUri = null
         conversionFileCount = selectedFiles.size
         
         // Track the format for navigation after completion
@@ -668,6 +670,10 @@ class RawFilePickerFragment : Fragment() {
                                 if (result.task.outputFormat == OutputFormat.DNG) {
                                     lastConvertedDngUri = saveResult.uri
                                 }
+                                // Track URI for single JPEG conversion (Share feature)
+                                if (result.task.outputFormat == OutputFormat.JPEG) {
+                                    lastConvertedJpegUri = saveResult.uri
+                                }
                             }
                             is SaveResult.SuccessWithWarning -> {
                                 // Mark success but log warning
@@ -678,6 +684,10 @@ class RawFilePickerFragment : Fragment() {
                                 // Track URI for single DNG conversion (Snapseed feature)
                                 if (result.task.outputFormat == OutputFormat.DNG) {
                                     lastConvertedDngUri = saveResult.uri
+                                }
+                                // Track URI for single JPEG conversion (Share feature)
+                                if (result.task.outputFormat == OutputFormat.JPEG) {
+                                    lastConvertedJpegUri = saveResult.uri
                                 }
                             }
                             is SaveResult.Failed -> {
@@ -769,10 +779,24 @@ class RawFilePickerFragment : Fragment() {
                             openInSnapseedSetting &&
                             snapseedInstalled
                         
+                        // Check if we should share (single JPEG conversion)
+                        val shareJpegSetting = SettingsFragment.getShareSingleJpeg(requireContext())
+                        Log.d(tag, "Share JPEG decision: completed=$conversionCompletedSuccessfully, fileCount=$conversionFileCount, format=$lastConversionFormat, jpegUri=$lastConvertedJpegUri, setting=$shareJpegSetting")
+                        
+                        val shouldShareJpeg = conversionCompletedSuccessfully &&
+                            conversionFileCount == 1 &&
+                            lastConversionFormat == OutputFormat.JPEG &&
+                            lastConvertedJpegUri != null &&
+                            shareJpegSetting
+                        
                         if (shouldOpenSnapseed) {
                             // Open in Snapseed
                             Log.d(tag, "Opening DNG in Snapseed: $lastConvertedDngUri")
                             openInSnapseed(lastConvertedDngUri!!)
+                        } else if (shouldShareJpeg) {
+                            // Share JPEG
+                            Log.d(tag, "Sharing JPEG: $lastConvertedJpegUri")
+                            shareJpeg(lastConvertedJpegUri!!)
                         } else if (binding.checkAutoNavigate.isChecked && conversionCompletedSuccessfully) {
                             // Auto-navigate if checkbox is checked AND all conversions succeeded without warnings
                             startAutoNavigateCountdown()
@@ -878,6 +902,28 @@ class RawFilePickerFragment : Fragment() {
             showPickerContent()
         } catch (e: Exception) {
             Log.e(tag, "Failed to open Snapseed", e)
+            // Fall back to gallery navigation
+            (activity as? MainActivity)?.navigateToGallery(lastConversionFormat)
+            showPickerContent()
+        }
+    }
+    
+    /**
+     * Share a JPEG file via Android share sheet.
+     */
+    private fun shareJpeg(uri: Uri) {
+        try {
+            Log.d(tag, "Sharing JPEG: uri=$uri")
+            val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                type = "image/jpeg"
+                putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            val chooser = android.content.Intent.createChooser(shareIntent, null)
+            startActivity(chooser)
+            showPickerContent()
+        } catch (e: Exception) {
+            Log.e(tag, "Failed to share JPEG", e)
             // Fall back to gallery navigation
             (activity as? MainActivity)?.navigateToGallery(lastConversionFormat)
             showPickerContent()

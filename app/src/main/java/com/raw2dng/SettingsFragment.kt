@@ -24,6 +24,7 @@ class SettingsFragment : Fragment() {
         const val KEY_ENABLED_RAW_TYPES = "enabled_raw_types"
         const val KEY_HIDE_CONVERTED = "hide_converted_images"
         const val KEY_OPEN_IN_SNAPSEED = "open_single_dng_in_snapseed"
+        const val KEY_SHARE_SINGLE_JPEG = "share_single_jpeg_on_completion"
         const val DEFAULT_TIMEOUT = 3
         const val SNAPSEED_PACKAGE = "com.niksoftware.snapseed"
         
@@ -65,6 +66,15 @@ class SettingsFragment : Fragment() {
         }
         
         /**
+         * Get whether to prompt share for single JPEG conversions instead of navigating to gallery.
+         * Default is false.
+         */
+        fun getShareSingleJpeg(context: Context): Boolean {
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            return prefs.getBoolean(KEY_SHARE_SINGLE_JPEG, false)
+        }
+        
+        /**
          * Check if Snapseed is installed on the device.
          */
         fun isSnapseedInstalled(context: Context): Boolean {
@@ -93,6 +103,7 @@ class SettingsFragment : Fragment() {
     private lateinit var seekAutonavTimeout: SeekBar
     private lateinit var chkHideConverted: CheckBox
     private lateinit var chkOpenInSnapseed: CheckBox
+    private lateinit var chkShareJpeg: CheckBox
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -168,6 +179,14 @@ class SettingsFragment : Fragment() {
             saveSettings()
         }
         
+        // Setup Share JPEG checkbox
+        chkShareJpeg = view.findViewById(R.id.chkShareJpeg)
+        chkShareJpeg.isChecked = getShareSingleJpeg(requireContext())
+        chkShareJpeg.setOnCheckedChangeListener { _, isChecked ->
+            android.util.Log.d("SettingsFragment", "Share JPEG checkbox changed to: $isChecked")
+            saveSettings()
+        }
+        
         // Setup JPEG settings button
         btnJpegSettings.setOnClickListener {
             JpegSettingsDialog.newInstance().show(childFragmentManager, JpegSettingsDialog.TAG)
@@ -202,9 +221,12 @@ class SettingsFragment : Fragment() {
         // Save Snapseed setting
         editor.putBoolean(KEY_OPEN_IN_SNAPSEED, chkOpenInSnapseed.isChecked)
         
+        // Save Share JPEG setting
+        editor.putBoolean(KEY_SHARE_SINGLE_JPEG, chkShareJpeg.isChecked)
+        
         editor.apply()
         
-        android.util.Log.d("SettingsFragment", "Settings saved - Snapseed: ${chkOpenInSnapseed.isChecked}")
+        android.util.Log.d("SettingsFragment", "Settings saved - Snapseed: ${chkOpenInSnapseed.isChecked}, ShareJpeg: ${chkShareJpeg.isChecked}")
     }
     
     private fun notifySettingsChanged() {
