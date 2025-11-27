@@ -221,11 +221,13 @@ class ImagePreviewDialog : DialogFragment() {
         val btnZoomOut: ImageButton = view.findViewById(R.id.btnZoomOut)
         val btnFitScreen: ImageButton = view.findViewById(R.id.btnFitScreen)
 
-        // Setup ViewPager2 with adapter
-        imagePagerAdapter = ImagePagerAdapter(requireContext(), imageUris)
+        // Setup ViewPager2 with adapter - pass fileNames and fileSizes for EXIF overlay
+        imagePagerAdapter = ImagePagerAdapter(requireContext(), imageUris, fileNames, fileSizes)
         imagePagerAdapter.setOnZoomChangeListener { scale ->
             val percentage = (scale * 100).toInt()
             zoomLevel.text = "$percentage%"
+            // Update EXIF overlay visibility based on zoom
+            imagePagerAdapter.updateZoomState(scale)
         }
         previewPager.adapter = imagePagerAdapter
 
@@ -398,6 +400,7 @@ class ImagePreviewDialog : DialogFragment() {
                     }
                     thumbnailStripAdapter.updateItemSelection(position, isNowSelected)
                     updateConvertButtons()
+                    updateSelectionCount()
                     selectionChangeListener?.onSelectionChanged(uri, isNowSelected)
                 }
             }
@@ -502,6 +505,7 @@ class ImagePreviewDialog : DialogFragment() {
         
         updateSelectionButton()
         updateConvertButtons()
+        updateSelectionCount()
         
         // Update thumbnail strip checkmark in gallery mode
         if (previewMode == PreviewMode.GALLERY_VIEW) {

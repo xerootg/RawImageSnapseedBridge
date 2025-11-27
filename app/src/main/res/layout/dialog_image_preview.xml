@@ -134,7 +134,7 @@
             android:paddingEnd="4dp"
             android:scrollbars="none" />
 
-        <!-- Top bar with filename and close button -->
+        <!-- Top bar with controls -->
         <LinearLayout
             android:id="@+id/topBar"
             android:layout_width="match_parent"
@@ -143,24 +143,22 @@
             android:orientation="horizontal"
             android:padding="8dp">
 
+        <!-- Hidden filename - data now shown on image overlay -->
         <TextView
             android:id="@+id/previewFileName"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:ellipsize="middle"
-            android:maxLines="1"
-            android:paddingStart="8dp"
-            android:textColor="@android:color/white"
-            android:textSize="14sp" />
+            android:layout_height="0dp"
+            android:visibility="gone" />
 
+        <!-- File size display -->
         <TextView
             android:id="@+id/previewFileSize"
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:paddingStart="8dp"
             android:textColor="#AAAAAA"
-            android:textSize="12sp"
-            android:layout_marginEnd="8dp" />
+            android:textSize="12sp" />
 
         <ImageButton
             android:id="@+id/btnSelectImage"
