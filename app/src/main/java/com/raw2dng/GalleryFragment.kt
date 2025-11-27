@@ -400,14 +400,21 @@ class GalleryFragment : Fragment() {
             return
         }
 
-        androidx.appcompat.app.AlertDialog.Builder(requireContext())
-            .setTitle(title)
-            .setMessage(getString(confirmMessage, fileCount))
-            .setPositiveButton("Delete") { _, _ ->
-                clearRaw2DNGFolder()
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
+        // On Android 11+, MediaStore.createDeleteRequest shows its own system dialog
+        // so we don't need to show our own confirmation
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            clearRaw2DNGFolder()
+        } else {
+            // On older Android, show our own confirmation dialog
+            androidx.appcompat.app.AlertDialog.Builder(requireContext())
+                .setTitle(title)
+                .setMessage(getString(confirmMessage, fileCount))
+                .setPositiveButton("Delete") { _, _ ->
+                    clearRaw2DNGFolder()
+                }
+                .setNegativeButton("Cancel", null)
+                .show()
+        }
     }
     
     private data class Quad<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)
