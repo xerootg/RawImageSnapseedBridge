@@ -8,13 +8,19 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
+import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.TextView
 import android.widget.Toast
 import androidx.fragment.app.DialogFragment
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.widget.ViewPager2
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
 
 /**
  * Preview mode determines which UI elements are shown
@@ -65,6 +71,9 @@ class ImagePreviewDialog : DialogFragment() {
     private lateinit var btnConvertDng: android.widget.Button
     private lateinit var btnOpenWith: android.widget.Button
     private lateinit var selectionCountText: TextView
+    private lateinit var exifOverlay: FrameLayout
+    private lateinit var exifText: TextView
+    private lateinit var btnInfo: ImageButton
 
     companion object {
         private const val ARG_URIS = "uris"
@@ -185,6 +194,9 @@ class ImagePreviewDialog : DialogFragment() {
         btnPrevious = view.findViewById(R.id.btnPrevious)
         btnNext = view.findViewById(R.id.btnNext)
         btnSelectImage = view.findViewById(R.id.btnSelectImage)
+        btnInfo = view.findViewById(R.id.btnInfo)
+        exifOverlay = view.findViewById(R.id.exifOverlay)
+        exifText = view.findViewById(R.id.exifText)
         
         val closeButton: ImageButton = view.findViewById(R.id.closeButton)
         val btnZoomIn: ImageButton = view.findViewById(R.id.btnZoomIn)
@@ -240,6 +252,16 @@ class ImagePreviewDialog : DialogFragment() {
 
         btnSelectImage.setOnClickListener {
             toggleCurrentImageSelection()
+        }
+        
+        // EXIF info button
+        btnInfo.setOnClickListener {
+            toggleExifOverlay()
+        }
+        
+        // Tap overlay to close
+        exifOverlay.setOnClickListener {
+            hideExifOverlay()
         }
 
         selectionCountText = view.findViewById(R.id.selectionCountText)
@@ -473,6 +495,126 @@ class ImagePreviewDialog : DialogFragment() {
         } else {
             selectionCountText.text = ""
         }
+    }
+    
+    private fun toggleExifOverlay() {
+        if (exifOverlay.visibility == View.VISIBLE) {
+            hideExifOverlay()
+        } else {
+            showExifOverlay()
+        }
+    }
+    
+    private fun showExifOverlay() {
+        exifOverlay.visibility = View.VISIBLE
+        exifText.text = getString(R.string.loading_exif)
+        
+        // Load EXIF data asynchronously
+        lifecycleScope.launch {
+            val exifData = loadExifData()
+            if (isAdded && exifOverlay.visibility == View.VISIBLE) {
+                exifText.text = formatExifData(exifData)
+            }
+        }
+    }
+    
+    private fun hideExifOverlay() {
+        exifOverlay.visibility = View.GONE
+    }
+    
+    private suspend fun loadExifData(): ExifData = withContext(Dispatchers.IO) {
+        val uri = imageUris.getOrNull(currentPosition) ?: return@withContext ExifData(error = "No image")
+        val fileName = fileNames.getOrNull(currentPosition) ?: ""
+        val fileSize = fileSizes.getOrNull(currentPosition) ?: 0L
+        val fileType = fileTypes.getOrNull(currentPosition) ?: ""
+        
+        // Check if this is a RAW file (Convert mode) or converted file (Gallery mode)
+        if (previewMode == PreviewMode.RAW_CONVERSION) {
+            // RAW file - need to copy to cache and use LibRaw
+            try {
+                val context = requireContext()
+                val cacheDir = context.cacheDir
+                val tempFile = File(cacheDir, "exif_temp_${System.currentTimeMillis()}.raw")
+                
+                // Copy file to cache
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    tempFile.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                
+                val exif = ExifData.extractFromRaw(tempFile.absolutePath, fileName, fileSize)
+                tempFile.delete()
+                exif
+            } catch (e: Exception) {
+                ExifData(fileName = fileName, fileSize = fileSize, error = "Failed to read RAW: ${e.message}")
+            }
+        } else {
+            // Gallery mode - DNG/JPEG file, use ExifInterface
+            try {
+                ExifData.extractFromFile(requireContext(), uri, fileName, fileSize)
+            } catch (e: Exception) {
+                ExifData(fileName = fileName, fileSize = fileSize, error = "Failed to read EXIF: ${e.message}")
+            }
+        }
+    }
+    
+    private fun formatExifData(exif: ExifData): String {
+        val sb = StringBuilder()
+        
+        if (exif.error != null) {
+            sb.appendLine("Error: ${exif.error}")
+            sb.appendLine()
+        }
+        
+        // File info
+        if (exif.fileName.isNotEmpty()) {
+            sb.appendLine("📄 ${exif.fileName}")
+        }
+        if (exif.fileSize > 0) {
+            sb.appendLine("💾 ${formatFileSize(exif.fileSize)}")
+        }
+        if (exif.fileType.isNotEmpty()) {
+            sb.appendLine("📁 ${exif.fileType}")
+        }
+        sb.appendLine()
+        
+        // Camera info
+        if (exif.camera.isNotEmpty()) {
+            sb.appendLine("📷 ${exif.camera}")
+        }
+        if (exif.lens.isNotEmpty()) {
+            sb.appendLine("🔭 ${exif.lens}")
+        }
+        sb.appendLine()
+        
+        // Exposure settings
+        val exposureInfo = mutableListOf<String>()
+        if (exif.focalLengthString.isNotEmpty()) exposureInfo.add(exif.focalLengthString)
+        if (exif.apertureString.isNotEmpty()) exposureInfo.add(exif.apertureString)
+        if (exif.shutterSpeed.isNotEmpty()) exposureInfo.add(exif.shutterSpeed)
+        if (exif.isoString.isNotEmpty()) exposureInfo.add(exif.isoString)
+        
+        if (exposureInfo.isNotEmpty()) {
+            sb.appendLine("⚙️ ${exposureInfo.joinToString("  •  ")}")
+            sb.appendLine()
+        }
+        
+        // Dimensions
+        if (exif.dimensionsString.isNotEmpty()) {
+            sb.appendLine("📐 ${exif.dimensionsString}")
+        }
+        if (exif.rawDimensionsString.isNotEmpty()) {
+            sb.appendLine("📐 Sensor: ${exif.rawDimensionsString}")
+        }
+        
+        // Date
+        if (exif.dateTime.isNotEmpty()) {
+            sb.appendLine()
+            sb.appendLine("📅 ${exif.dateTime}")
+        }
+        
+        return sb.toString().trimEnd()
     }
     
     /**

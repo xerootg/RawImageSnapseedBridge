@@ -69,4 +69,11 @@ class DNGConverter {
      * @return SDK version string
      */
     external fun getSDKVersion(): String
+    
+    /**
+     * Extract metadata from a RAW file as JSON string
+     * @param inputPath Path to input RAW file
+     * @return JSON string with metadata, or JSON with "error" field on failure
+     */
+    external fun extractMetadata(inputPath: String): String
 }

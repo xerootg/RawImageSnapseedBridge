@@ -553,4 +553,118 @@ bool LibRawReader::convertToJPEG(const std::string& inputPath,
     return convertToJPEG(inputPath, outputPath, settings, errorMessage);
 }
 
+// Helper to escape JSON strings
+static std::string escapeJson(const std::string& s) {
+    std::string result;
+    result.reserve(s.size() + 16);
+    for (char c : s) {
+        switch (c) {
+            case '"': result += "\\\""; break;
+            case '\\': result += "\\\\"; break;
+            case '\b': result += "\\b"; break;
+            case '\f': result += "\\f"; break;
+            case '\n': result += "\\n"; break;
+            case '\r': result += "\\r"; break;
+            case '\t': result += "\\t"; break;
+            default:
+                if (c >= 0 && c < 32) {
+                    char buf[8];
+                    snprintf(buf, sizeof(buf), "\\u%04x", (unsigned char)c);
+                    result += buf;
+                } else {
+                    result += c;
+                }
+        }
+    }
+    return result;
+}
+
+// Extract metadata from RAW file as JSON
+bool LibRawReader::extractMetadataJson(const std::string& inputPath,
+                                       std::string& jsonOutput,
+                                       std::string& errorMessage) {
+    LOGD("Extracting metadata from: %s", inputPath.c_str());
+    
+    LibRaw processor;
+    
+    int ret = processor.open_file(inputPath.c_str());
+    if (ret != LIBRAW_SUCCESS) {
+        errorMessage = "Failed to open RAW file: " + std::string(libraw_strerror(ret));
+        LOGE("%s", errorMessage.c_str());
+        return false;
+    }
+    
+    // Access metadata
+    auto& idata = processor.imgdata.idata;
+    auto& other = processor.imgdata.other;
+    auto& sizes = processor.imgdata.sizes;
+    auto& lens = processor.imgdata.lens;
+    
+    // Format shutter speed as a fraction
+    char shutterStr[32] = "";
+    if (other.shutter > 0 && other.shutter < 1.0) {
+        snprintf(shutterStr, sizeof(shutterStr), "1/%.0f", 1.0 / other.shutter);
+    } else if (other.shutter >= 1.0) {
+        snprintf(shutterStr, sizeof(shutterStr), "%.1f", other.shutter);
+    }
+    
+    // Format timestamp
+    char dateStr[64] = "";
+    if (other.timestamp > 0) {
+        struct tm* tm_info = localtime(&other.timestamp);
+        if (tm_info) {
+            strftime(dateStr, sizeof(dateStr), "%Y-%m-%d %H:%M:%S", tm_info);
+        }
+    }
+    
+    // Build JSON
+    char json[4096];
+    snprintf(json, sizeof(json),
+        "{"
+        "\"make\":\"%s\","
+        "\"model\":\"%s\","
+        "\"lens_make\":\"%s\","
+        "\"lens_model\":\"%s\","
+        "\"focal_length\":%.1f,"
+        "\"aperture\":%.1f,"
+        "\"shutter\":\"%s\","
+        "\"shutter_raw\":%.6f,"
+        "\"iso\":%.0f,"
+        "\"timestamp\":\"%s\","
+        "\"timestamp_raw\":%ld,"
+        "\"width\":%d,"
+        "\"height\":%d,"
+        "\"raw_width\":%d,"
+        "\"raw_height\":%d,"
+        "\"orientation\":%d,"
+        "\"colors\":%d,"
+        "\"bayer_pattern\":\"%s\""
+        "}",
+        escapeJson(idata.make).c_str(),
+        escapeJson(idata.model).c_str(),
+        escapeJson(lens.LensMake).c_str(),
+        escapeJson(lens.Lens).c_str(),
+        other.focal_len,
+        other.aperture,
+        shutterStr,
+        other.shutter,
+        other.iso_speed,
+        dateStr,
+        (long)other.timestamp,
+        sizes.width,
+        sizes.height,
+        sizes.raw_width,
+        sizes.raw_height,
+        sizes.flip,
+        idata.colors,
+        escapeJson(idata.cdesc).c_str()
+    );
+    
+    jsonOutput = json;
+    processor.recycle();
+    
+    LOGD("Extracted metadata JSON: %s", jsonOutput.c_str());
+    return true;
+}
+
 } // namespace raw2dng

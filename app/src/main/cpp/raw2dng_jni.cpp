@@ -126,4 +126,33 @@ Java_com_raw2dng_DNGConverter_convertToJPEG(
     }
 }
 
+JNIEXPORT jstring JNICALL
+Java_com_raw2dng_DNGConverter_extractMetadata(
+        JNIEnv* env,
+        jobject /* this */,
+        jstring inputPath) {
+    
+    const char* inputPathStr = env->GetStringUTFChars(inputPath, nullptr);
+    
+    LOGD("JNI: Extracting metadata from %s", inputPathStr);
+    
+    std::string jsonOutput;
+    std::string errorMessage;
+    bool success = raw2dng::LibRawReader::extractMetadataJson(
+        std::string(inputPathStr),
+        jsonOutput,
+        errorMessage
+    );
+    
+    env->ReleaseStringUTFChars(inputPath, inputPathStr);
+    
+    if (success) {
+        return env->NewStringUTF(jsonOutput.c_str());
+    } else {
+        // Return error as JSON with error field
+        std::string errorJson = "{\"error\":\"" + errorMessage + "\"}";
+        return env->NewStringUTF(errorJson.c_str());
+    }
+}
+
 } // extern "C"

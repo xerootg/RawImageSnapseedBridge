@@ -2,7 +2,6 @@
 ## high priority
 
 ### exif
-*) preview view should have a button to show all exif data for both gallery and convert. it belongs with the zoom and nav controls on the bottom of the page. it should be an overlay over the image
 *) all exif data should be transfered to jpeg
 *) all exif data should be transfered to dng
 
@@ -14,7 +13,10 @@
 *) conversion list should be filterable by exif data like camera, lens, etc
 
 ## low priority
-*) better reprocess dialogue, maybe reuse existing one
+*) exif overlay tap anywhere to close is broken, you have to press the x
+*) jpeg quality slider goes to 1 which is silly, cap at 80 min
+*) button style for regen/preview/open/delete is smushed and also mismatched from the rest of the UI
+*) better reprocess dialogue, maybe reuse existing conversion view
 *) playstore???
 *) a button in settings after the licenses button to navigate to the github for this project
 *) source libraw from the jetpack source

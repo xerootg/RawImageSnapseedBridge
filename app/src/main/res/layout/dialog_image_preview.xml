@@ -11,6 +11,63 @@
         android:layout_height="match_parent"
         android:contentDescription="@string/image_preview" />
 
+    <!-- EXIF Data Overlay -->
+    <FrameLayout
+        android:id="@+id/exifOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#CC000000"
+        android:visibility="gone"
+        android:clickable="true"
+        android:focusable="true">
+
+        <ScrollView
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_marginTop="140dp"
+            android:layout_marginBottom="100dp"
+            android:padding="16dp">
+
+            <LinearLayout
+                android:id="@+id/exifContent"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/exifTitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/exif_title"
+                    android:textColor="@android:color/white"
+                    android:textSize="18sp"
+                    android:textStyle="bold"
+                    android:layout_marginBottom="16dp" />
+
+                <TextView
+                    android:id="@+id/exifText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="@android:color/white"
+                    android:textSize="14sp"
+                    android:lineSpacingMultiplier="1.4" />
+
+            </LinearLayout>
+
+        </ScrollView>
+
+        <TextView
+            android:id="@+id/exifTapToClose"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|center_horizontal"
+            android:layout_marginBottom="110dp"
+            android:text="@string/tap_to_close"
+            android:textColor="#888888"
+            android:textSize="12sp" />
+
+    </FrameLayout>
+
     <LinearLayout
         android:id="@+id/topContainer"
         android:layout_width="match_parent"
@@ -164,6 +221,15 @@
             android:background="?attr/selectableItemBackgroundBorderless"
             android:src="@drawable/ic_zoom_in"
             android:contentDescription="@string/zoom_in"
+            app:tint="@android:color/white" />
+
+        <ImageButton
+            android:id="@+id/btnInfo"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_info"
+            android:contentDescription="@string/show_exif"
             app:tint="@android:color/white" />
 
         <ImageButton

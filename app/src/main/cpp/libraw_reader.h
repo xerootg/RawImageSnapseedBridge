@@ -124,6 +124,12 @@ public:
                               int chromaSubsampling,
                               bool optimizeCoding,
                               std::string& errorMessage);
+    
+    // Static method to extract metadata from a RAW file as JSON string
+    // Returns true on success, false on failure (sets errorMessage)
+    static bool extractMetadataJson(const std::string& inputPath,
+                                    std::string& jsonOutput,
+                                    std::string& errorMessage);
 
 private:
     std::unique_ptr<LibRaw> processor_;

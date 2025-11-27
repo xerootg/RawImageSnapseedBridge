@@ -86,7 +86,9 @@ ImagePreviewDialog (shared)
 │   ├── RAW mode: D/J conversion badges
 │   └── Gallery mode: Green selection checkmarks
 ├── Selection toggle button
-├── Zoom controls
+├── Zoom controls with info button
+├── EXIF/metadata overlay (toggle via info button)
+├── File size display
 ├── RAW mode: Convert buttons (JPEG/DNG)
 └── Gallery mode: Open with button
 ```
@@ -123,6 +125,7 @@ com.raw2dng/
 ├── JpegSettingsDialog.kt     # JPEG conversion settings (quality, chroma, optimize)
 ├── LicensesDialog.kt         # Open source licenses display
 ├── RegenerateDialog.kt       # Regeneration settings dialog (one-time settings)
+├── ExifData.kt               # EXIF/metadata extraction helper (ExifInterface + JNI)
 └── FullscreenImageActivity.kt # Fullscreen RAW preview
 ```
 
@@ -139,6 +142,7 @@ cpp/
 ├── libraw_reader.cpp/h       # LibRaw wrapper for reading RAW files
 ├── jpeg_converter.cpp/h      # JPEG export using LibRaw + libjpeg
 ├── raw_metadata.h            # Metadata structure shared across modules
+├── raw2dng_jni.cpp           # JNI entry points (extractMetadataJson, etc.)
 │
 ├── libraw/                   # LibRaw library source
 ├── dng_sdk/                  # Adobe DNG SDK source
@@ -365,8 +369,9 @@ GalleryFragment.regenerateSelectedImages()
 19. **Settings Dialog**: Gear icon in both tabs opens settings with configurable auto-navigate timeout
 20. **Hide/Dim Converted Images**: Optional filter to hide or gray out already-converted images
 21. **JPEG Settings Dialog**: Configure default JPEG quality, chroma subsampling, and Huffman optimization
-22. **File Size Display**: Gallery thumbnails show file size overlay; selection summary shows total size
-23. **Preview File Size**: Gallery preview shows current image file size and total selected size
+17. **File Size Display**: Gallery thumbnails show file size overlay; selection summary shows total size
+18. **Preview File Size**: Gallery preview shows current image file size and total selected size
+19. **EXIF/Metadata Overlay**: Info button in preview shows detailed image metadata in scrollable overlay
 
 ### JPEG Encoding Settings
 
@@ -481,6 +486,46 @@ SharedPreferences Keys:
 26. **Settings gear icon**: Both fragments have headerRow with settings button that opens SettingsDialog
 27. **RAW type filtering**: RawFilePickerFragment.getEnabledRawExtensions() reads from SharedPreferences
 28. **FlexboxLayout**: Google library for responsive chip layout in settings dialog
+29. **ExifData**: Helper class using ExifInterface (DNG/JPEG) or JNI extractMetadataJson (RAW)
+30. **EXIF categories**: Camera, Exposure, Lens, Image, File - displayed in scrollable overlay
+31. **extractMetadataJson()**: JNI method in libraw_reader.cpp returns JSON with RAW metadata
+
+### EXIF/Metadata Overlay
+
+```
+ImagePreviewDialog Info Button Flow:
+  → User taps info button (ℹ) in zoom controls
+  → exifOverlay visibility toggles (GONE ↔ VISIBLE)
+  → If becoming visible:
+    → loadExifData() coroutine launches
+    → PreviewMode determines extraction method:
+      - GALLERY_VIEW: ExifInterface reads DNG/JPEG EXIF tags
+      - RAW_CONVERSION: JNI extractMetadataJson() via LibRaw
+    → Metadata parsed into categories:
+      - Camera: Make, Model
+      - Exposure: ISO, Shutter Speed, Aperture, Exposure Bias
+      - Lens: Focal Length, Lens Model
+      - Image: Resolution, Orientation
+      - File: Size
+    → Categories formatted as section headers with key-value pairs
+    → exifContent TextView updated with formatted text
+    → Overlay is scrollable via exifScrollView
+
+ExifData.kt:
+  → extractExifData(context, uri, mode): Main entry point
+  → extractRawMetadata(inputPath): JNI path for RAW files
+  → parseRawMetadataJson(json): Parses JSON from native code
+  → Returns Map<String, Map<String, String>> (category → key/value pairs)
+
+libraw_reader.cpp:
+  → extractMetadataJson(inputPath, errorMessage): Static method
+  → Returns JSON string with:
+    - camera: {make, model}
+    - exposure: {iso, shutter, aperture, exposure_bias}
+    - lens: {focal_length, lens}
+    - image: {width, height, orientation, timestamp}
+    - sensor: {raw_width, raw_height}
+```
 
 ### Testing Checklist
 
@@ -541,6 +586,11 @@ When making changes, verify:
 - [ ] Gallery selection summary shows total size
 - [ ] Gallery preview shows file size next to filename
 - [ ] Gallery preview selection count shows total selected size
+- [ ] Info button appears in preview zoom controls
+- [ ] EXIF overlay shows metadata for DNG/JPEG files
+- [ ] RAW metadata overlay shows camera info for RAW files
+- [ ] EXIF overlay is scrollable for long content
+- [ ] EXIF overlay toggle works (show/hide)
 
 ### Common Issues
 
