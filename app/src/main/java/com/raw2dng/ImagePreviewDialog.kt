@@ -74,7 +74,7 @@ class ImagePreviewDialog : DialogFragment() {
     private lateinit var btnSelectImage: ImageButton
     private lateinit var btnConvertJpeg: android.widget.Button
     private lateinit var btnConvertDng: android.widget.Button
-    private lateinit var btnOpenWith: android.widget.Button
+    private lateinit var btnOpenWith: ImageButton
     private lateinit var selectionCountText: TextView
     private lateinit var exifOverlay: FrameLayout
     private lateinit var exifText: TextView
@@ -310,9 +310,16 @@ class ImagePreviewDialog : DialogFragment() {
         }
         
         btnOpenWith.setOnClickListener {
-            if (selectedUris.isNotEmpty()) {
-                openWithRequestedListener?.onOpenWithRequested(selectedUris.toList())
-                    ?: openWithDefaultHandler()
+            // If no images selected, use the current image
+            val urisToShare = if (selectedUris.isNotEmpty()) {
+                selectedUris.toList()
+            } else {
+                imageUris.getOrNull(currentPosition)?.let { listOf(it) } ?: emptyList()
+            }
+            
+            if (urisToShare.isNotEmpty()) {
+                openWithRequestedListener?.onOpenWithRequested(urisToShare)
+                    ?: openWithDefaultHandler(urisToShare)
             }
         }
         
@@ -345,8 +352,7 @@ class ImagePreviewDialog : DialogFragment() {
         }
     }
     
-    private fun openWithDefaultHandler() {
-        val urisToOpen = selectedUris.toList()
+    private fun openWithDefaultHandler(urisToOpen: List<Uri>) {
         if (urisToOpen.isEmpty()) return
         
         try {
@@ -510,7 +516,8 @@ class ImagePreviewDialog : DialogFragment() {
         val hasSelection = count > 0
         btnConvertJpeg.isEnabled = hasSelection
         btnConvertDng.isEnabled = hasSelection
-        btnOpenWith.isEnabled = hasSelection
+        // Open/share button is always enabled in gallery mode - shares current image if nothing selected
+        btnOpenWith.isEnabled = previewMode == PreviewMode.GALLERY_VIEW || hasSelection
         selectionCountText.text = if (count > 0) count.toString() else ""
     }
     

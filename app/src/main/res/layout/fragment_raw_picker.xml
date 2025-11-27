@@ -185,7 +185,7 @@
                 android:layout_height="wrap_content"
                 android:text="@string/show_log"
                 android:textSize="12sp"
-                style="@style/Widget.MaterialComponents.Button.TextButton" />
+                style="@style/Widget.Material3.Button.TextButton" />
 
         </LinearLayout>
 

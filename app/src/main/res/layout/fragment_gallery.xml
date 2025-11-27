@@ -99,42 +99,47 @@
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal">
+            android:orientation="horizontal"
+            android:gravity="center">
 
-            <Button
+            <ImageButton
                 android:id="@+id/previewSelectedButton"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:layout_marginEnd="4dp"
-                android:text="@string/preview"
-                style="@style/Widget.MaterialComponents.Button" />
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:layout_marginEnd="16dp"
+                android:src="@drawable/ic_search"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/preview"
+                app:tint="?attr/colorPrimary" />
 
-            <Button
+            <ImageButton
                 android:id="@+id/regenerateSelectedButton"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:layout_marginEnd="4dp"
-                android:text="@string/regenerate"
-                style="@style/Widget.MaterialComponents.Button" />
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:layout_marginEnd="16dp"
+                android:src="@drawable/ic_refresh"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/regenerate"
+                app:tint="?attr/colorPrimary" />
 
-            <Button
+            <ImageButton
                 android:id="@+id/openSelectedButton"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:layout_marginEnd="4dp"
-                android:text="@string/open"
-                style="@style/Widget.MaterialComponents.Button" />
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:layout_marginEnd="16dp"
+                android:src="@drawable/ic_share"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/open"
+                app:tint="?attr/colorPrimary" />
 
-            <Button
+            <ImageButton
                 android:id="@+id/deleteSelectedButton"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="@string/delete"
-                style="@style/Widget.MaterialComponents.Button" />
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:src="@drawable/ic_delete"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/delete"
+                app:tint="?attr/colorError" />
 
         </LinearLayout>
 
