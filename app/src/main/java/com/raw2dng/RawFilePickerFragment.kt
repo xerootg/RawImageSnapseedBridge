@@ -637,23 +637,24 @@ class RawFilePickerFragment : Fragment() {
         binding.conversionStatus.text = "0/$fileCount"
         binding.btnDone.isEnabled = false
         
-        // Populate the thumbnail grid with selected files
+        val formatName = if (outputFormat == OutputFormat.DNG) "DNG" else "JPEG"
+        val extension = if (outputFormat == OutputFormat.DNG) "dng" else "jpg"
+        
+        // Populate the thumbnail grid with selected files (show target filename, not source)
         val thumbnailItems = selectedFiles.map { rawFile ->
             val needsOverwriteFlag = when (outputFormat) {
                 OutputFormat.DNG -> rawFile.isConvertedToDng
                 OutputFormat.JPEG -> rawFile.isConvertedToJpeg
             }
+            val targetFileName = rawFile.name.substringBeforeLast('.') + "." + extension
             ConversionThumbnailItem(
                 uri = rawFile.uri,
-                fileName = rawFile.name,
+                fileName = targetFileName,
                 status = if (needsOverwriteFlag) ConversionItemStatus.NEEDS_CONFIRMATION else ConversionItemStatus.PENDING,
                 needsOverwrite = needsOverwriteFlag
             )
         }
         conversionThumbnailAdapter.setItems(thumbnailItems)
-        
-        val formatName = if (outputFormat == OutputFormat.DNG) "DNG" else "JPEG"
-        val extension = if (outputFormat == OutputFormat.DNG) "dng" else "jpg"
         
         if (needsConfirmation.isNotEmpty()) {
             appendLog("${needsConfirmation.size} file(s) already converted - tap to confirm overwrite\n")
