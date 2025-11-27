@@ -3,17 +3,21 @@ package com.raw2dng
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Matrix
 import android.net.Uri
+import android.provider.MediaStore
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ProgressBar
+import androidx.exifinterface.media.ExifInterface
 import androidx.recyclerview.widget.RecyclerView
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 
 class ImagePagerAdapter(
     private val context: Context,
@@ -113,9 +117,17 @@ class ImagePagerAdapter(
                     inPreferredConfig = Bitmap.Config.ARGB_8888
                 }
 
-                contentResolver.openInputStream(uri)?.use { inputStream ->
+                var bitmap = contentResolver.openInputStream(uri)?.use { inputStream ->
                     BitmapFactory.decodeStream(inputStream, null, loadOptions)
                 }
+                
+                // Apply EXIF rotation for DNG files
+                // BitmapFactory doesn't automatically apply EXIF orientation
+                if (bitmap != null) {
+                    bitmap = applyExifRotation(uri, bitmap)
+                }
+                
+                bitmap
             } else {
                 // OS can't read this format, try native extraction
                 // Use larger size for full preview
@@ -130,6 +142,67 @@ class ImagePagerAdapter(
                 e2.printStackTrace()
                 null
             }
+        }
+    }
+    
+    /**
+     * Apply EXIF rotation to a bitmap if needed.
+     * BitmapFactory.decodeStream() doesn't apply EXIF orientation automatically.
+     */
+    private fun applyExifRotation(uri: Uri, bitmap: Bitmap): Bitmap {
+        try {
+            // Get the file path from the URI
+            val projection = arrayOf(MediaStore.Images.Media.DATA)
+            context.contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val columnIndex = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATA)
+                    val filePath = cursor.getString(columnIndex)
+                    if (filePath != null && File(filePath).exists()) {
+                        val exif = ExifInterface(filePath)
+                        val orientation = exif.getAttributeInt(
+                            ExifInterface.TAG_ORIENTATION,
+                            ExifInterface.ORIENTATION_NORMAL
+                        )
+                        return rotateBitmap(bitmap, orientation)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            // Fall through and return original bitmap
+        }
+        return bitmap
+    }
+    
+    /**
+     * Rotate a bitmap based on EXIF orientation value.
+     */
+    private fun rotateBitmap(bitmap: Bitmap, orientation: Int): Bitmap {
+        val matrix = Matrix()
+        when (orientation) {
+            ExifInterface.ORIENTATION_ROTATE_90 -> matrix.postRotate(90f)
+            ExifInterface.ORIENTATION_ROTATE_180 -> matrix.postRotate(180f)
+            ExifInterface.ORIENTATION_ROTATE_270 -> matrix.postRotate(270f)
+            ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> matrix.postScale(-1f, 1f)
+            ExifInterface.ORIENTATION_FLIP_VERTICAL -> matrix.postScale(1f, -1f)
+            ExifInterface.ORIENTATION_TRANSPOSE -> {
+                matrix.postRotate(90f)
+                matrix.postScale(-1f, 1f)
+            }
+            ExifInterface.ORIENTATION_TRANSVERSE -> {
+                matrix.postRotate(-90f)
+                matrix.postScale(-1f, 1f)
+            }
+            else -> return bitmap // ORIENTATION_NORMAL or undefined
+        }
+        
+        return try {
+            val rotated = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+            if (rotated != bitmap) {
+                bitmap.recycle()
+            }
+            rotated
+        } catch (e: Exception) {
+            bitmap
         }
     }
 

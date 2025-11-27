@@ -1,13 +1,17 @@
 package com.raw2dng
 
+import android.graphics.Bitmap
+import android.graphics.Matrix
 import android.net.Uri
 import android.os.Build
+import android.provider.MediaStore
 import android.util.Size
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
+import androidx.exifinterface.media.ExifInterface
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
@@ -16,6 +20,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 
 /**
  * Data class for thumbnail strip items with conversion and selection status
@@ -103,11 +108,12 @@ class ThumbnailStripAdapter(
 
         // Load thumbnail asynchronously
         val job = CoroutineScope(Dispatchers.Main).launch {
+            val context = holder.itemView.context
             val bitmap = withContext(Dispatchers.IO) {
                 // First try OS thumbnail loading
-                val osBitmap = try {
+                var osBitmap: Bitmap? = try {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        holder.itemView.context.contentResolver.loadThumbnail(
+                        context.contentResolver.loadThumbnail(
                             item.uri,
                             Size(120, 120),
                             null
@@ -119,8 +125,13 @@ class ThumbnailStripAdapter(
                     null
                 }
                 
+                // Apply rotation for DNG files if needed
+                if (osBitmap != null && item.fileType?.uppercase() == "DNG") {
+                    osBitmap = applyDngRotation(context, osBitmap, item.uri)
+                }
+                
                 // If OS couldn't load thumbnail, try native extraction
-                osBitmap ?: ThumbnailCache.extractAndCacheThumbnail(holder.itemView.context, item.uri, 120)
+                osBitmap ?: ThumbnailCache.extractAndCacheThumbnail(context, item.uri, 120)
             }
 
             bitmap?.let {
@@ -218,6 +229,69 @@ class ThumbnailStripAdapter(
 
         override fun areContentsTheSame(oldItem: ThumbnailStripItem, newItem: ThumbnailStripItem): Boolean {
             return oldItem == newItem
+        }
+    }
+    
+    companion object {
+        /**
+         * Apply rotation to a DNG thumbnail based on EXIF orientation.
+         * Android's loadThumbnail() doesn't properly apply orientation for DNG files.
+         */
+        private fun applyDngRotation(context: android.content.Context, bitmap: Bitmap, uri: Uri): Bitmap {
+            try {
+                // Get the file path from the URI
+                val projection = arrayOf(MediaStore.Images.Media.DATA)
+                context.contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        val columnIndex = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATA)
+                        val filePath = cursor.getString(columnIndex)
+                        if (filePath != null && File(filePath).exists()) {
+                            val exif = ExifInterface(filePath)
+                            val orientation = exif.getAttributeInt(
+                                ExifInterface.TAG_ORIENTATION,
+                                ExifInterface.ORIENTATION_NORMAL
+                            )
+                            return rotateBitmap(bitmap, orientation)
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                // Fall through and return original bitmap
+            }
+            return bitmap
+        }
+        
+        /**
+         * Rotate a bitmap based on EXIF orientation value.
+         */
+        private fun rotateBitmap(bitmap: Bitmap, orientation: Int): Bitmap {
+            val matrix = Matrix()
+            when (orientation) {
+                ExifInterface.ORIENTATION_ROTATE_90 -> matrix.postRotate(90f)
+                ExifInterface.ORIENTATION_ROTATE_180 -> matrix.postRotate(180f)
+                ExifInterface.ORIENTATION_ROTATE_270 -> matrix.postRotate(270f)
+                ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> matrix.postScale(-1f, 1f)
+                ExifInterface.ORIENTATION_FLIP_VERTICAL -> matrix.postScale(1f, -1f)
+                ExifInterface.ORIENTATION_TRANSPOSE -> {
+                    matrix.postRotate(90f)
+                    matrix.postScale(-1f, 1f)
+                }
+                ExifInterface.ORIENTATION_TRANSVERSE -> {
+                    matrix.postRotate(-90f)
+                    matrix.postScale(-1f, 1f)
+                }
+                else -> return bitmap // ORIENTATION_NORMAL or undefined
+            }
+            
+            return try {
+                val rotated = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+                if (rotated != bitmap) {
+                    bitmap.recycle()
+                }
+                rotated
+            } catch (e: Exception) {
+                bitmap
+            }
         }
     }
 }

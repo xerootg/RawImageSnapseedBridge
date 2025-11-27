@@ -750,6 +750,7 @@ When making changes, verify:
 - [ ] Converted DNG files contain complete EXIF data (camera, lens, exposure, GPS)
 - [ ] GPS coordinates are preserved in both JPEG and DNG output
 - [ ] Date/time is correctly transferred to converted files
+- [ ] DNG thumbnails in gallery are correctly rotated
 
 ### Common Issues
 
@@ -762,3 +763,4 @@ When making changes, verify:
 7. **RAW files not appearing**: Check settings for enabled RAW types, verify extension is in ALL_RAW_EXTENSIONS
 8. **Missing EXIF in JPEG**: Check that ExifData.writeExifToJpeg() is called after conversion in ConversionQueue
 9. **File gets "(1)" suffix on overwrite**: File was created by previous app installation. Android Scoped Storage prevents modifying files not owned by the current app. Delete from Gallery first using the clear/delete feature (uses `MediaStore.createDeleteRequest()` for system confirmation), then re-convert.
+10. **DNG thumbnails not rotated**: Android's `loadThumbnail()` doesn't apply EXIF orientation for DNG files. GalleryAdapter, ThumbnailStripAdapter, and ImagePagerAdapter manually read EXIF orientation and apply rotation.
