@@ -323,6 +323,8 @@ GalleryFragment.previewSelectedImages()
 17. **Gallery Filter Clear Selection**: Changing gallery filter clears any active selection
 18. **High-Quality JPEG Export**: Configurable JPEG encoding with quality, chroma subsampling, and Huffman optimization
 19. **Settings Dialog**: Gear icon in both tabs opens settings with configurable auto-navigate timeout
+20. **Hide/Dim Converted Images**: Optional filter to hide or gray out already-converted images
+21. **JPEG Settings Dialog**: Configure default JPEG quality, chroma subsampling, and Huffman optimization
 
 ### JPEG Encoding Settings
 
@@ -368,17 +370,35 @@ SettingsDialog.kt
 │   ├── 0 seconds shows warning (orange text)
 │   └── Persisted via KEY_AUTONAV_TIMEOUT
 │
-└── Enabled RAW File Types
-    ├── Multi-chip selection (FlexboxLayout)
-    ├── 20 formats: cr2, cr3, nef, nrw, arw, srf, sr2, orf, pef,
-    │   rw2, 3fr, iiq, dcr, k25, kdc, erf, mef, mos, raf, dng
-    ├── Warning if none selected
-    └── Persisted via KEY_ENABLED_RAW_TYPES (StringSet)
+├── Enabled RAW File Types
+│   ├── Multi-chip selection (FlexboxLayout)
+│   ├── 20 formats: cr2, cr3, nef, nrw, arw, srf, sr2, orf, pef,
+│   │   rw2, 3fr, iiq, dcr, k25, kdc, erf, mef, mos, raf, dng
+│   ├── Warning if none selected
+│   └── Persisted via KEY_ENABLED_RAW_TYPES (StringSet)
+│
+├── Hide Already Converted Images (checkbox)
+│   ├── When checked: filter hides converted files completely
+│   ├── When unchecked: converted files shown grayed out (35% opacity)
+│   └── Persisted via KEY_HIDE_CONVERTED (Boolean, default: true)
+│
+└── JPEG Quality Settings (button → JpegSettingsDialog)
+    ├── Quality: SeekBar 1-100 (default: 95)
+    ├── Chroma Subsampling: RadioGroup
+    │   ├── 4:4:4 - Best quality (default)
+    │   ├── 4:2:2 - Balanced
+    │   └── 4:2:0 - Smallest file
+    ├── Optimize Huffman: Checkbox (default: true)
+    └── Persisted via KEY_JPEG_QUALITY, KEY_JPEG_CHROMA, KEY_JPEG_OPTIMIZE
 
 SharedPreferences Keys:
   PREFS_NAME = "raw2dng_prefs"
   KEY_AUTONAV_TIMEOUT = "autonav_timeout_seconds" (Int, default: 3)
   KEY_ENABLED_RAW_TYPES = "enabled_raw_types" (StringSet, default: all)
+  KEY_HIDE_CONVERTED = "hide_converted_images" (Boolean, default: true)
+  KEY_JPEG_QUALITY = "jpeg_quality" (Int, default: 95)
+  KEY_JPEG_CHROMA = "jpeg_chroma_subsampling" (Int, default: 0 = 4:4:4)
+  KEY_JPEG_OPTIMIZE = "jpeg_optimize_coding" (Boolean, default: true)
   KEY_AUTO_NAVIGATE = "auto_navigate" (Boolean)
   KEY_SHOW_LOG = "show_log" (Boolean)
 ```

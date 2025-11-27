@@ -8,16 +8,16 @@
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="@string/settings"
+        android:text="@string/jpeg_settings_title"
         android:textSize="20sp"
         android:textStyle="bold"
         android:layout_marginBottom="16dp" />
 
-    <!-- Auto-navigate timeout setting -->
+    <!-- Quality setting -->
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="@string/autonav_timeout_label"
+        android:text="@string/jpeg_quality_label"
         android:textSize="16sp"
         android:layout_marginBottom="8dp" />
 
@@ -28,34 +28,33 @@
         android:gravity="center_vertical">
 
         <SeekBar
-            android:id="@+id/seekAutonavTimeout"
+            android:id="@+id/seekJpegQuality"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:max="30"
-            android:progress="3" />
+            android:min="1"
+            android:max="100"
+            android:progress="95" />
 
         <TextView
-            android:id="@+id/txtAutonavValue"
+            android:id="@+id/txtQualityValue"
             android:layout_width="48dp"
             android:layout_height="wrap_content"
-            android:text="3s"
+            android:text="95"
             android:textAlignment="center"
             android:layout_marginStart="8dp" />
 
     </LinearLayout>
 
     <TextView
-        android:id="@+id/txtAutonavWarning"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="@string/autonav_zero_warning"
-        android:textColor="#FF5722"
+        android:text="@string/jpeg_quality_hint"
         android:textSize="12sp"
-        android:visibility="gone"
+        android:textColor="@android:color/darker_gray"
         android:layout_marginTop="4dp" />
 
-    <!-- RAW file types setting -->
+    <!-- Chroma subsampling setting -->
     <View
         android:layout_width="match_parent"
         android:layout_height="1dp"
@@ -66,18 +65,45 @@
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="@string/raw_types_label"
+        android:text="@string/jpeg_chroma_label"
         android:textSize="16sp"
         android:layout_marginBottom="8dp" />
 
-    <Button
-        android:id="@+id/btnSelectRawTypes"
+    <RadioGroup
+        android:id="@+id/radioGroupChroma"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        style="@style/Widget.Material3.Button.OutlinedButton"
-        android:text="@string/raw_types_select" />
+        android:orientation="vertical">
 
-    <!-- Hide converted images setting -->
+        <RadioButton
+            android:id="@+id/radioChroma444"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/chroma_444" />
+
+        <RadioButton
+            android:id="@+id/radioChroma422"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/chroma_422" />
+
+        <RadioButton
+            android:id="@+id/radioChroma420"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/chroma_420" />
+
+    </RadioGroup>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/jpeg_chroma_hint"
+        android:textSize="12sp"
+        android:textColor="@android:color/darker_gray"
+        android:layout_marginTop="4dp" />
+
+    <!-- Optimize Huffman tables setting -->
     <View
         android:layout_width="match_parent"
         android:layout_height="1dp"
@@ -86,48 +112,27 @@
         android:layout_marginBottom="16dp" />
 
     <CheckBox
-        android:id="@+id/chkHideConverted"
+        android:id="@+id/chkOptimizeHuffman"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="@string/hide_converted_label"
+        android:text="@string/jpeg_optimize_label"
         android:checked="true" />
 
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="@string/hide_converted_hint"
+        android:text="@string/jpeg_optimize_hint"
         android:textSize="12sp"
         android:textColor="@android:color/darker_gray"
         android:layout_marginStart="32dp"
         android:layout_marginTop="4dp" />
 
-    <!-- JPEG quality settings -->
-    <View
-        android:layout_width="match_parent"
-        android:layout_height="1dp"
-        android:background="@android:color/darker_gray"
-        android:layout_marginTop="16dp"
-        android:layout_marginBottom="16dp" />
-
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="@string/jpeg_settings_label"
-        android:textSize="16sp"
-        android:layout_marginBottom="8dp" />
-
+    <!-- OK button -->
     <Button
-        android:id="@+id/btnJpegSettings"
+        android:id="@+id/btnOk"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        style="@style/Widget.Material3.Button.OutlinedButton"
-        android:text="@string/jpeg_settings_button" />
-
-    <Button
-        android:id="@+id/btnSave"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="@string/save"
-        android:layout_marginTop="16dp" />
+        android:text="@string/ok"
+        android:layout_marginTop="24dp" />
 
 </LinearLayout>

@@ -1,10 +1,8 @@
 # backlog
 ## high priority
 
-### settings window, rendered as a gear on the top right corner of the gallery and convert views
-- all of these settings should be persisted
-*) a button to a dialogue with all license credits
-*) the jpeg conversion factors such as quality level, in a modal to be reused later. an ok button on the modal will be used 
+### settings window
+*) a button to a dialogue with all license credits, end of the list.
 
 ### conversion workflow (depends on settings)
 *) from the gallery tab, regenrate should be an option, and prompt the user for settings, defaulting at the app level. do not persist these values

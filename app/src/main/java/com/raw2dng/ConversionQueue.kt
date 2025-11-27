@@ -25,13 +25,19 @@ data class ConversionResult(
  * Manages parallel conversion of RAW files.
  * 
  * @param parallelism Maximum number of concurrent conversions (default: 2)
+ * @param jpegQuality JPEG quality (1-100)
+ * @param jpegChroma Chroma subsampling mode
+ * @param jpegOptimize Enable Huffman table optimization
  */
 class ConversionQueue(
     private val converter: DNGConverter,
     private val onTaskStarting: (task: ConversionTask, current: Int, total: Int) -> Unit,
     private val onTaskComplete: (ConversionResult) -> Unit,
     private val onAllComplete: (successful: Int, failed: Int) -> Unit,
-    private val parallelism: Int = DEFAULT_PARALLELISM
+    private val parallelism: Int = DEFAULT_PARALLELISM,
+    private val jpegQuality: Int = DNGConverter.DEFAULT_QUALITY,
+    private val jpegChroma: Int = DNGConverter.DEFAULT_SUBSAMPLING,
+    private val jpegOptimize: Boolean = DNGConverter.DEFAULT_OPTIMIZE
 ) {
     companion object {
         private const val TAG = "ConversionQueue"
@@ -176,9 +182,9 @@ class ConversionQueue(
                 OutputFormat.JPEG -> converter.convertToJPEG(
                     task.inputPath, 
                     task.outputPath, 
-                    DNGConverter.DEFAULT_QUALITY,
-                    DNGConverter.DEFAULT_SUBSAMPLING,
-                    DNGConverter.DEFAULT_OPTIMIZE
+                    jpegQuality,
+                    jpegChroma,
+                    jpegOptimize
                 )
             }
 

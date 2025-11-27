@@ -613,6 +613,11 @@ class RawFilePickerFragment : Fragment() {
             }
         }
 
+        // Read JPEG settings from preferences
+        val jpegQuality = JpegSettingsDialog.getJpegQuality(requireContext())
+        val jpegChroma = JpegSettingsDialog.getJpegChroma(requireContext())
+        val jpegOptimize = JpegSettingsDialog.getJpegOptimize(requireContext())
+
         conversionQueue = ConversionQueue(
             converter = converter,
             onTaskStarting = { task, _, _ ->
@@ -699,7 +704,10 @@ class RawFilePickerFragment : Fragment() {
                         }
                     }
                 }
-            }
+            },
+            jpegQuality = jpegQuality,
+            jpegChroma = jpegChroma,
+            jpegOptimize = jpegOptimize
         )
 
         conversionQueue?.addTasks(tasks)

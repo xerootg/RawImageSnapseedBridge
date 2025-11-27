@@ -114,6 +114,12 @@ class SettingsDialog : DialogFragment() {
         val chkHideConverted = view.findViewById<android.widget.CheckBox>(R.id.chkHideConverted)
         chkHideConverted.isChecked = getHideConverted(requireContext())
         
+        // Setup JPEG settings button
+        val btnJpegSettings = view.findViewById<Button>(R.id.btnJpegSettings)
+        btnJpegSettings.setOnClickListener {
+            JpegSettingsDialog.newInstance().show(childFragmentManager, JpegSettingsDialog.TAG)
+        }
+        
         val dialog = MaterialAlertDialogBuilder(requireContext())
             .setView(view)
             .create()

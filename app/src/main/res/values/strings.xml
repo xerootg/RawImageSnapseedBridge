@@ -92,4 +92,19 @@
     <string name="clear_all">Clear All</string>
     <string name="hide_converted_label">Hide already converted images</string>
     <string name="hide_converted_hint">When unchecked, converted images appear grayed out instead of hidden</string>
+    
+    <!-- JPEG Settings -->
+    <string name="jpeg_settings_label">JPEG conversion defaults</string>
+    <string name="jpeg_settings_button">Configure JPEG settings…</string>
+    <string name="jpeg_settings_title">JPEG Settings</string>
+    <string name="jpeg_quality_label">Quality (1–100)</string>
+    <string name="jpeg_quality_hint">Higher values = better quality, larger file size</string>
+    <string name="jpeg_chroma_label">Chroma subsampling</string>
+    <string name="chroma_444">4:4:4 — Best quality (no subsampling)</string>
+    <string name="chroma_422">4:2:2 — Balanced (horizontal only)</string>
+    <string name="chroma_420">4:2:0 — Smallest file (may show color artifacts)</string>
+    <string name="jpeg_chroma_hint">Subsampling reduces color resolution to shrink file size</string>
+    <string name="jpeg_optimize_label">Optimize Huffman tables</string>
+    <string name="jpeg_optimize_hint">Reduces file size slightly with no quality loss</string>
+    <string name="ok">OK</string>
 </resources>
