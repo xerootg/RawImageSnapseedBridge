@@ -116,6 +116,7 @@ com.raw2dng/
 ├── DNGConverter.kt           # JNI bridge to native code
 ├── ImagePreviewDialog.kt     # Fullscreen preview dialog with selection
 ├── ImagePagerAdapter.kt      # ViewPager2 adapter for preview images
+├── SettingsDialog.kt         # Settings dialog (currently empty, for future use)
 └── FullscreenImageActivity.kt # Fullscreen RAW preview
 ```
 
@@ -315,12 +316,13 @@ GalleryFragment.previewSelectedImages()
 10. **Overwrite Confirmation**: Previously converted files require tap to confirm before re-conversion
 11. **Real-time Status Updates**: Conversion badges update immediately after conversion/deletion
 12. **Preview Conversion Badges**: Thumbnail strip shows D/J/D+J badges per image
-13. **Auto-Navigate to Gallery**: Optional 3-second countdown after successful conversion
+13. **Auto-Navigate to Gallery**: Configurable countdown (0-30s) after successful conversion, persisted in settings
 14. **Log/Thumbnail Toggle**: Switch between visual progress grid and text log during conversion
 15. **Tab Navigation Cleanup**: Conversion overlay clears when navigating away if done
 16. **Screen Rotation Handling**: State preserved via configChanges (no activity recreation)
 17. **Gallery Filter Clear Selection**: Changing gallery filter clears any active selection
 18. **High-Quality JPEG Export**: Configurable JPEG encoding with quality, chroma subsampling, and Huffman optimization
+19. **Settings Dialog**: Gear icon in both tabs opens settings with configurable auto-navigate timeout
 
 ### JPEG Encoding Settings
 
@@ -355,6 +357,32 @@ The app includes hardcoded color matrices for cameras not fully supported by Lib
 - Olympus OM-1 (ORF files)
 - More can be added in `libraw_to_dng.cpp`
 
+### Settings Dialog
+
+The app includes a settings dialog accessible via gear icon in both fragments:
+
+```
+SettingsDialog.kt
+├── Auto-Navigate Timeout (0-30 seconds)
+│   ├── SeekBar with value display
+│   ├── 0 seconds shows warning (orange text)
+│   └── Persisted via KEY_AUTONAV_TIMEOUT
+│
+└── Enabled RAW File Types
+    ├── Multi-chip selection (FlexboxLayout)
+    ├── 20 formats: cr2, cr3, nef, nrw, arw, srf, sr2, orf, pef,
+    │   rw2, 3fr, iiq, dcr, k25, kdc, erf, mef, mos, raf, dng
+    ├── Warning if none selected
+    └── Persisted via KEY_ENABLED_RAW_TYPES (StringSet)
+
+SharedPreferences Keys:
+  PREFS_NAME = "raw2dng_prefs"
+  KEY_AUTONAV_TIMEOUT = "autonav_timeout_seconds" (Int, default: 3)
+  KEY_ENABLED_RAW_TYPES = "enabled_raw_types" (StringSet, default: all)
+  KEY_AUTO_NAVIGATE = "auto_navigate" (Boolean)
+  KEY_SHOW_LOG = "show_log" (Boolean)
+```
+
 ### Important Implementation Details
 
 1. **RawFileItem.isConvertedToDng/isConvertedToJpeg** are `var` (mutable) to allow refresh
@@ -366,7 +394,7 @@ The app includes hardcoded color matrices for cameras not fully supported by Lib
 7. **ThumbnailStripItem** carries conversion status (dng/jpeg booleans) for badge display
 8. **500ms delay** after deletion before refreshing Convert tab (ensures filesystem sync)
 9. **ViewPager2.OnPageChangeCallback** clears conversion overlay when switching tabs (if done)
-10. **SharedPreferences** persists: auto-navigate checkbox, log/thumbnail toggle preference
+10. **SharedPreferences** persists: auto-navigate checkbox, log/thumbnail toggle preference, timeout, RAW types
 11. **conversionCompletedSuccessfully** flag enables checkbox to trigger countdown after completion
 12. **configChanges** in manifest preserves state on screen rotation (no activity recreation)
 13. **Button styling**: All buttons use Material filled style for consistency
@@ -382,6 +410,9 @@ The app includes hardcoded color matrices for cameras not fully supported by Lib
 23. **Gallery filter clears selection**: Changing filters calls clearSelectionOnFilterChange() to prevent stale item references
 24. **JPEG quality defaults**: 95 quality, 4:4:4 chroma (no subsampling), Huffman optimization enabled
 25. **Double-tap preview**: Both GalleryAdapter and RawFileAdapter use GestureDetector for double-tap to open preview
+26. **Settings gear icon**: Both fragments have headerRow with settings button that opens SettingsDialog
+27. **RAW type filtering**: RawFilePickerFragment.getEnabledRawExtensions() reads from SharedPreferences
+28. **FlexboxLayout**: Google library for responsive chip layout in settings dialog
 
 ### Testing Checklist
 
@@ -418,6 +449,11 @@ When making changes, verify:
 - [ ] Toggle selection from gallery preview updates adapter on dismiss
 - [ ] Long-press thumbnail in gallery preview toggles selection
 - [ ] "Open with" button in gallery preview works
+- [ ] Settings dialog opens from gear icon in both tabs
+- [ ] Auto-navigate timeout setting persists across app restarts
+- [ ] RAW type selection persists and filters file list correctly
+- [ ] Disabling all RAW types shows warning and prevents save
+- [ ] Changing RAW types refreshes file list on dialog dismiss
 
 ### Common Issues
 
@@ -427,3 +463,4 @@ When making changes, verify:
 4. **Install fails**: Run `adb uninstall com.raw2dng` first if signing keys changed
 5. **Corrupt output during parallel conversion**: Ensure `LIBRAW_NOTHREADS` is NOT defined in CMakeLists.txt (LibRaw needs Thread Local Storage enabled)
 6. **Files saved with UUID in name**: Check that `saveToPublicStorage()` receives the original filename, not the cache filename
+7. **RAW files not appearing**: Check settings for enabled RAW types, verify extension is in ALL_RAW_EXTENSIONS

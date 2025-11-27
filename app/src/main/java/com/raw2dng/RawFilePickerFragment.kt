@@ -51,7 +51,8 @@ class RawFilePickerFragment : Fragment() {
     private val PREFS_NAME = "raw2dng_prefs"
     private val KEY_AUTO_NAVIGATE = "auto_navigate_gallery"
     private val KEY_SHOW_LOG = "show_conversion_log"
-    private val COUNTDOWN_SECONDS = 3
+    private val KEY_AUTONAV_TIMEOUT = "autonav_timeout_seconds"
+    private val DEFAULT_COUNTDOWN_SECONDS = 3
     
     // Log view
     private var showingLog = false
@@ -69,11 +70,10 @@ class RawFilePickerFragment : Fragment() {
     private var conversionQueue: ConversionQueue? = null
     private lateinit var conversionThumbnailAdapter: ConversionThumbnailAdapter
 
-    // Supported RAW extensions (case-insensitive)
-    private val rawExtensions = setOf(
-        "cr2", "cr3", "nef", "nrw", "arw", "srf", "sr2", "orf", "pef",
-        "rw2", "3fr", "iiq", "dcr", "k25", "kdc", "erf", "mef", "mos", "raf"
-    )
+    // Supported RAW extensions - loaded from settings
+    private fun getEnabledRawExtensions(): Set<String> {
+        return SettingsDialog.getEnabledRawTypes(requireContext())
+    }
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -199,6 +199,10 @@ class RawFilePickerFragment : Fragment() {
                 adapter.selectAll(visibleFiles)
             }
             updateSelectionUI()
+        }
+
+        binding.btnSettings.setOnClickListener {
+            showSettingsDialog()
         }
 
         binding.btnConvertDng.setOnClickListener {
@@ -348,6 +352,8 @@ class RawFilePickerFragment : Fragment() {
             val sizeColumn = it.getColumnIndexOrThrow(MediaStore.Images.Media.SIZE)
             val dateColumn = it.getColumnIndexOrThrow(MediaStore.Images.Media.DATE_MODIFIED)
 
+            val enabledExtensions = getEnabledRawExtensions()
+            
             while (it.moveToNext()) {
                 val id = it.getLong(idColumn)
                 val name = it.getString(nameColumn) ?: continue
@@ -356,7 +362,7 @@ class RawFilePickerFragment : Fragment() {
 
                 // Check if it's a RAW file by extension
                 val ext = name.substringAfterLast('.', "").lowercase(Locale.getDefault())
-                if (ext !in rawExtensions) continue
+                if (ext !in enabledExtensions) continue
 
                 val uri = android.content.ContentUris.withAppendedId(
                     MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
@@ -711,14 +717,24 @@ class RawFilePickerFragment : Fragment() {
     
     private fun startAutoNavigateCountdown() {
         countdownJob?.cancel()
+        
+        val prefs = requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val countdownSeconds = prefs.getInt(KEY_AUTONAV_TIMEOUT, DEFAULT_COUNTDOWN_SECONDS)
+        
         countdownJob = viewLifecycleOwner.lifecycleScope.launch {
-            for (seconds in COUNTDOWN_SECONDS downTo 1) {
-                binding.btnDone.text = getString(R.string.done_countdown, seconds)
-                delay(1000)
+            if (countdownSeconds == 0) {
+                // Immediate navigation - no countdown
+                (activity as? MainActivity)?.navigateToGallery(lastConversionFormat)
+                showPickerContent()
+            } else {
+                for (seconds in countdownSeconds downTo 1) {
+                    binding.btnDone.text = getString(R.string.done_countdown, seconds)
+                    delay(1000)
+                }
+                // Time's up - navigate to gallery
+                (activity as? MainActivity)?.navigateToGallery(lastConversionFormat)
+                showPickerContent()
             }
-            // Time's up - navigate to gallery
-            (activity as? MainActivity)?.navigateToGallery(lastConversionFormat)
-            showPickerContent()
         }
     }
     
@@ -833,6 +849,17 @@ class RawFilePickerFragment : Fragment() {
             Log.e(tag, "Error saving to public directory", e)
             null
         }
+    }
+
+    private fun showSettingsDialog() {
+        val dialog = SettingsDialog.newInstance()
+        dialog.setOnSettingsSavedListener(object : SettingsDialog.OnSettingsSavedListener {
+            override fun onSettingsSaved() {
+                // Reload the file list with the new RAW type settings
+                loadRawFiles()
+            }
+        })
+        dialog.show(childFragmentManager, SettingsDialog.TAG)
     }
 
     override fun onDestroyView() {

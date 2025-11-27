@@ -143,6 +143,10 @@ class GalleryFragment : Fragment() {
             deleteSelectedImages()
         }
         
+        binding.btnSettings.setOnClickListener {
+            showSettingsDialog()
+        }
+        
         // Setup filter chips
         setupFilterChips()
     }
@@ -754,6 +758,10 @@ class GalleryFragment : Fragment() {
             updateFilterChipStates()
             loadImages()
         }
+    }
+
+    private fun showSettingsDialog() {
+        SettingsDialog.newInstance().show(childFragmentManager, SettingsDialog.TAG)
     }
 
     override fun onResume() {

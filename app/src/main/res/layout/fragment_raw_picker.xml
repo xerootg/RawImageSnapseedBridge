@@ -10,39 +10,63 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent">
 
+        <!-- Header row with filter chips and settings button -->
         <LinearLayout
-            android:id="@+id/filterChips"
+            android:id="@+id/headerRow"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:padding="8dp"
+            android:gravity="center_vertical"
+            android:paddingStart="8dp"
+            android:paddingEnd="4dp"
+            android:paddingTop="8dp"
+            android:paddingBottom="8dp"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent">
 
-            <com.google.android.material.chip.Chip
-                android:id="@+id/chipShowAll"
-                android:layout_width="wrap_content"
+            <LinearLayout
+                android:id="@+id/filterChips"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginEnd="8dp"
-                android:text="@string/show_all"
-                style="@style/Widget.MaterialComponents.Chip.Filter" />
+                android:layout_weight="1"
+                android:orientation="horizontal">
 
-            <com.google.android.material.chip.Chip
-                android:id="@+id/chipNotDng"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginEnd="8dp"
-                android:text="@string/not_dng"
-                android:checked="true"
-                style="@style/Widget.MaterialComponents.Chip.Filter" />
-                
-            <com.google.android.material.chip.Chip
-                android:id="@+id/chipNotJpeg"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/not_jpeg"
-                style="@style/Widget.MaterialComponents.Chip.Filter" />
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/chipShowAll"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="8dp"
+                    android:text="@string/show_all"
+                    style="@style/Widget.MaterialComponents.Chip.Filter" />
+
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/chipNotDng"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="8dp"
+                    android:text="@string/not_dng"
+                    android:checked="true"
+                    style="@style/Widget.MaterialComponents.Chip.Filter" />
+                    
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/chipNotJpeg"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/not_jpeg"
+                    style="@style/Widget.MaterialComponents.Chip.Filter" />
+
+            </LinearLayout>
+
+            <ImageButton
+                android:id="@+id/btnSettings"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/open_settings"
+                android:src="@android:drawable/ic_menu_preferences"
+                android:scaleType="centerInside"
+                android:padding="8dp" />
 
         </LinearLayout>
 
@@ -55,7 +79,7 @@
             android:textSize="12sp"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/filterChips" />
+            app:layout_constraintTop_toBottomOf="@id/headerRow" />
 
         <ProgressBar
             android:id="@+id/loadingProgress"

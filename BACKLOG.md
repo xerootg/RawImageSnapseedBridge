@@ -3,10 +3,6 @@
 
 ### settings window, rendered as a gear on the top right corner of the gallery and convert views
 - all of these settings should be persisted
-*) allow the timeout for autonav to be overridden from 0 seconds (warning text for 0 seconds about failures not preventing navigation) to 30 seconds
-*) allow the list of known raw types to be any-combo of picked from
-*) allow the directories to search for raws in to be overridden (requires a picker)
-*) allow setting of the convert dialogue text log or thumbnail previews
 *) a button to a dialogue with all license credits
 *) allow filters on convert picker tab to de-emphasize, gray out if you will, images which have already been converted to that format
 *) the jpeg conversion factors such as quality level, in a modal to be reused later. an ok button on the modal will be used 
@@ -29,3 +25,4 @@
 *) a button in settings after the licenses button to navigate to the github for this project
 *) source libraw from the jetpack source
 *) find a way to handle license credits semi-automatically
+*) allow the directories to search for raws in to be overridden (requires a picker)
