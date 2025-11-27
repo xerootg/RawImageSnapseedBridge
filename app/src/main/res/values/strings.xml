@@ -107,6 +107,7 @@
     <string name="jpeg_optimize_label">Optimize Huffman tables</string>
     <string name="jpeg_optimize_hint">Reduces file size slightly with no quality loss</string>
     <string name="ok">OK</string>
+    <string name="cancel">Cancel</string>
     <string name="close">Close</string>
     
     <!-- Licenses -->
@@ -165,4 +166,17 @@ Includes:
 • Material Components for Android
 • Kotlin Standard Library
 • Kotlin Coroutines</string>
+    
+    <!-- Regenerate -->
+    <string name="regenerate">Regen</string>
+    <string name="regenerate_title">Regenerate</string>
+    <string name="regenerate_format_label">Output format</string>
+    <string name="regenerate_button">Regenerate</string>
+    <string name="regenerate_raw_not_found">Original RAW file not found for: %1$s</string>
+    <string name="regenerate_no_raw_files">No original RAW files found</string>
+    <string name="regenerate_found">Found %1$d of %2$d original RAW files</string>
+    <string name="regenerating">Regenerating…</string>
+    <string name="preview">Preview</string>
+    <string name="open">Open</string>
+    <string name="delete">Delete</string>
 </resources>

@@ -103,7 +103,16 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:layout_marginEnd="4dp"
-            android:text="@string/preview_selected"
+            android:text="@string/preview"
+            style="@style/Widget.MaterialComponents.Button" />
+
+        <Button
+            android:id="@+id/regenerateSelectedButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginEnd="4dp"
+            android:text="@string/regenerate"
             style="@style/Widget.MaterialComponents.Button" />
 
         <Button
@@ -112,7 +121,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:layout_marginEnd="4dp"
-            android:text="@string/open_selected"
+            android:text="@string/open"
             style="@style/Widget.MaterialComponents.Button" />
 
         <Button
@@ -120,7 +129,7 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="@string/delete_selected"
+            android:text="@string/delete"
             style="@style/Widget.MaterialComponents.Button" />
 
     </LinearLayout>

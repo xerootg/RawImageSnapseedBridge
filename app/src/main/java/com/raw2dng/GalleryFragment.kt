@@ -2,6 +2,7 @@ package com.raw2dng
 
 import android.Manifest
 import android.app.Activity
+import android.content.ContentValues
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.MediaScannerConnection
@@ -18,6 +19,7 @@ import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
@@ -27,6 +29,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.FileOutputStream
+import java.util.UUID
 
 /**
  * Filter options for gallery view.
@@ -143,6 +147,10 @@ class GalleryFragment : Fragment() {
             deleteSelectedImages()
         }
         
+        binding.regenerateSelectedButton.setOnClickListener {
+            showRegenerateDialog()
+        }
+        
         binding.btnSettings.setOnClickListener {
             showSettingsDialog()
         }
@@ -153,7 +161,6 @@ class GalleryFragment : Fragment() {
     
     private fun updateSelectionUI(count: Int) {
         if (count > 0) {
-            binding.openSelectedButton.text = getString(R.string.open_selected, count)
             binding.selectionButtonsContainer.visibility = View.VISIBLE
         } else {
             binding.selectionButtonsContainer.visibility = View.GONE
@@ -758,6 +765,318 @@ class GalleryFragment : Fragment() {
             updateFilterChipStates()
             loadImages()
         }
+    }
+
+    private fun showRegenerateDialog() {
+        val selectedItems = adapter.getSelectedItems()
+        if (selectedItems.isEmpty()) {
+            Toast.makeText(requireContext(), "No items selected", Toast.LENGTH_SHORT).show()
+            return
+        }
+        
+        val dialog = RegenerateDialog.newInstance()
+        dialog.setOnRegenerateListener(object : RegenerateDialog.OnRegenerateListener {
+            override fun onRegenerate(
+                outputFormat: OutputFormat,
+                jpegQuality: Int,
+                jpegChroma: Int,
+                jpegOptimize: Boolean
+            ) {
+                regenerateSelectedImages(selectedItems, outputFormat, jpegQuality, jpegChroma, jpegOptimize)
+            }
+        })
+        dialog.show(childFragmentManager, RegenerateDialog.TAG)
+    }
+    
+    private fun regenerateSelectedImages(
+        selectedItems: List<GalleryItem>,
+        outputFormat: OutputFormat,
+        jpegQuality: Int,
+        jpegChroma: Int,
+        jpegOptimize: Boolean
+    ) {
+        viewLifecycleOwner.lifecycleScope.launch {
+            // Find original RAW files for each selected item
+            val rawFiles = mutableListOf<Pair<GalleryItem, Uri>>()
+            val notFound = mutableListOf<String>()
+            
+            for (item in selectedItems) {
+                val baseName = item.name.substringBeforeLast('.')
+                val rawUri = findOriginalRaw(baseName)
+                if (rawUri != null) {
+                    rawFiles.add(Pair(item, rawUri))
+                } else {
+                    notFound.add(item.name)
+                }
+            }
+            
+            if (rawFiles.isEmpty()) {
+                Toast.makeText(
+                    requireContext(),
+                    getString(R.string.regenerate_no_raw_files),
+                    Toast.LENGTH_LONG
+                ).show()
+                return@launch
+            }
+            
+            if (notFound.isNotEmpty()) {
+                Toast.makeText(
+                    requireContext(),
+                    getString(R.string.regenerate_found, rawFiles.size, selectedItems.size),
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+            
+            // Show progress dialog
+            val progressDialog = AlertDialog.Builder(requireContext())
+                .setTitle(R.string.regenerating)
+                .setMessage("0/${rawFiles.size}")
+                .setCancelable(false)
+                .create()
+            progressDialog.show()
+            
+            var completed = 0
+            var successful = 0
+            val converter = DNGConverter()
+            
+            for ((galleryItem, rawUri) in rawFiles) {
+                val result = withContext(Dispatchers.IO) {
+                    regenerateSingleFile(galleryItem, rawUri, outputFormat, jpegQuality, jpegChroma, jpegOptimize, converter)
+                }
+                
+                completed++
+                if (result) successful++
+                
+                progressDialog.setMessage("$completed/${rawFiles.size}")
+            }
+            
+            progressDialog.dismiss()
+            
+            Toast.makeText(
+                requireContext(),
+                "Regenerated $successful of ${rawFiles.size} files",
+                Toast.LENGTH_SHORT
+            ).show()
+            
+            // Exit multi-select mode and refresh
+            adapter.clearSelection()
+            loadImages()
+            
+            // Refresh convert tab
+            (activity as? MainActivity)?.refreshConvertTab()
+        }
+    }
+    
+    private suspend fun regenerateSingleFile(
+        galleryItem: GalleryItem,
+        rawUri: Uri,
+        outputFormat: OutputFormat,
+        jpegQuality: Int,
+        jpegChroma: Int,
+        jpegOptimize: Boolean,
+        converter: DNGConverter
+    ): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val context = requireContext()
+            val cacheDir = context.cacheDir
+            val baseName = galleryItem.name.substringBeforeLast('.')
+            val uniqueId = UUID.randomUUID().toString().take(8)
+            
+            // Copy RAW file to cache
+            val rawExtension = getRawExtension(rawUri)
+            val cacheInputFile = File(cacheDir, "${baseName}_${uniqueId}.$rawExtension")
+            context.contentResolver.openInputStream(rawUri)?.use { input ->
+                FileOutputStream(cacheInputFile).use { output ->
+                    input.copyTo(output)
+                }
+            }
+            
+            // Prepare output file
+            val outputExtension = if (outputFormat == OutputFormat.DNG) "dng" else "jpg"
+            val cacheOutputFile = File(cacheDir, "${baseName}_${uniqueId}.$outputExtension")
+            
+            // Convert
+            val errorMessage = when (outputFormat) {
+                OutputFormat.DNG -> converter.convertToDNG(cacheInputFile.absolutePath, cacheOutputFile.absolutePath)
+                OutputFormat.JPEG -> converter.convertToJPEG(
+                    cacheInputFile.absolutePath,
+                    cacheOutputFile.absolutePath,
+                    jpegQuality,
+                    jpegChroma,
+                    jpegOptimize
+                )
+            }
+            
+            if (errorMessage.isNotEmpty()) {
+                Log.e(tag, "Regenerate failed: $errorMessage")
+                cacheInputFile.delete()
+                cacheOutputFile.delete()
+                return@withContext false
+            }
+            
+            // Save to public storage (overwrites existing file with same name)
+            val publicFileName = "$baseName.$outputExtension"
+            saveToPublicStorage(cacheOutputFile, outputFormat, publicFileName)
+            
+            // Clean up cache
+            cacheInputFile.delete()
+            cacheOutputFile.delete()
+            
+            true
+        } catch (e: Exception) {
+            Log.e(tag, "Regenerate error: ${e.message}", e)
+            false
+        }
+    }
+    
+    private fun getRawExtension(uri: Uri): String {
+        val cursor = requireContext().contentResolver.query(
+            uri,
+            arrayOf(MediaStore.MediaColumns.DISPLAY_NAME),
+            null, null, null
+        )
+        cursor?.use {
+            if (it.moveToFirst()) {
+                val name = it.getString(0)
+                return name.substringAfterLast('.', "raw")
+            }
+        }
+        return "raw"
+    }
+    
+    private suspend fun findOriginalRaw(baseName: String): Uri? = withContext(Dispatchers.IO) {
+        val contentResolver = requireContext().contentResolver
+        val rawExtensions = SettingsDialog.getEnabledRawTypes(requireContext())
+        
+        val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
+        } else {
+            MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+        }
+        
+        val projection = arrayOf(
+            MediaStore.Images.Media._ID,
+            MediaStore.Images.Media.DISPLAY_NAME
+        )
+        
+        // Search for each RAW extension
+        for (ext in rawExtensions) {
+            val selection = "${MediaStore.Images.Media.DISPLAY_NAME} LIKE ?"
+            val selectionArgs = arrayOf("$baseName.$ext")
+            
+            val cursor = contentResolver.query(
+                collection,
+                projection,
+                selection,
+                selectionArgs,
+                null
+            )
+            
+            cursor?.use {
+                if (it.moveToFirst()) {
+                    val id = it.getLong(it.getColumnIndexOrThrow(MediaStore.Images.Media._ID))
+                    return@withContext Uri.withAppendedPath(collection, id.toString())
+                }
+            }
+        }
+        
+        // Also try uppercase extensions
+        for (ext in rawExtensions) {
+            val selection = "${MediaStore.Images.Media.DISPLAY_NAME} LIKE ?"
+            val selectionArgs = arrayOf("$baseName.${ext.uppercase()}")
+            
+            val cursor = contentResolver.query(
+                collection,
+                projection,
+                selection,
+                selectionArgs,
+                null
+            )
+            
+            cursor?.use {
+                if (it.moveToFirst()) {
+                    val id = it.getLong(it.getColumnIndexOrThrow(MediaStore.Images.Media._ID))
+                    return@withContext Uri.withAppendedPath(collection, id.toString())
+                }
+            }
+        }
+        
+        null
+    }
+    
+    private fun saveToPublicStorage(sourceFile: File, format: OutputFormat, fileName: String) {
+        val context = requireContext()
+        
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            // Use MediaStore for Android 10+
+            val collection = MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+            
+            val relativePath = if (format == OutputFormat.DNG) {
+                "${Environment.DIRECTORY_PICTURES}/Raw2DNG"
+            } else {
+                "${Environment.DIRECTORY_PICTURES}/Raw2DNG/JPEG"
+            }
+            
+            val mimeType = if (format == OutputFormat.DNG) "image/x-adobe-dng" else "image/jpeg"
+            
+            // Check if file already exists and delete it
+            val existingUri = findExistingFile(fileName, relativePath)
+            existingUri?.let {
+                context.contentResolver.delete(it, null, null)
+            }
+            
+            val values = ContentValues().apply {
+                put(MediaStore.Images.Media.DISPLAY_NAME, fileName)
+                put(MediaStore.Images.Media.MIME_TYPE, mimeType)
+                put(MediaStore.Images.Media.RELATIVE_PATH, relativePath)
+                put(MediaStore.Images.Media.IS_PENDING, 1)
+            }
+            
+            val uri = context.contentResolver.insert(collection, values)
+            uri?.let {
+                context.contentResolver.openOutputStream(it)?.use { output ->
+                    sourceFile.inputStream().use { input ->
+                        input.copyTo(output)
+                    }
+                }
+                
+                values.clear()
+                values.put(MediaStore.Images.Media.IS_PENDING, 0)
+                context.contentResolver.update(it, values, null, null)
+            }
+        } else {
+            // Legacy storage for older Android versions
+            val baseDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), "Raw2DNG")
+            val outputDir = if (format == OutputFormat.DNG) baseDir else File(baseDir, "JPEG")
+            outputDir.mkdirs()
+            
+            val destFile = File(outputDir, fileName)
+            sourceFile.copyTo(destFile, overwrite = true)
+            
+            MediaScannerConnection.scanFile(context, arrayOf(destFile.absolutePath), null, null)
+        }
+    }
+    
+    private fun findExistingFile(fileName: String, relativePath: String): Uri? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
+        
+        val collection = MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+        val projection = arrayOf(MediaStore.Images.Media._ID)
+        val selection = "${MediaStore.Images.Media.DISPLAY_NAME} = ? AND ${MediaStore.Images.Media.RELATIVE_PATH} = ?"
+        val selectionArgs = arrayOf(fileName, "$relativePath/")
+        
+        val cursor = requireContext().contentResolver.query(
+            collection, projection, selection, selectionArgs, null
+        )
+        
+        cursor?.use {
+            if (it.moveToFirst()) {
+                val id = it.getLong(it.getColumnIndexOrThrow(MediaStore.Images.Media._ID))
+                return Uri.withAppendedPath(collection, id.toString())
+            }
+        }
+        
+        return null
     }
 
     private fun showSettingsDialog() {

@@ -76,6 +76,7 @@ MainActivity
     ├── Double-tap opens fullscreen preview
     ├── Long-press for multi-select mode
     ├── Preview button (multi-select mode)
+    ├── Regenerate button (multi-select mode)
     ├── Clear folder (filter-specific)
     └── Open in external app
 
@@ -121,6 +122,7 @@ com.raw2dng/
 ├── SettingsDialog.kt         # Main settings dialog with all app preferences
 ├── JpegSettingsDialog.kt     # JPEG conversion settings (quality, chroma, optimize)
 ├── LicensesDialog.kt         # Open source licenses display
+├── RegenerateDialog.kt       # Regeneration settings dialog (one-time settings)
 └── FullscreenImageActivity.kt # Fullscreen RAW preview
 ```
 
@@ -295,6 +297,40 @@ GalleryFragment.previewSelectedImages()
     - Long-press thumbnail to toggle that image's selection
     - Tap "Open with" to send selected images to external app
   → On dismiss, selection state syncs back to GalleryAdapter
+```
+
+### Regenerate Flow
+
+```
+GalleryFragment.showRegenerateDialog()
+  → Opens RegenerateDialog with selected gallery items
+  → Dialog shows:
+    - Format selection: DNG or JPEG radio buttons
+    - JPEG settings panel (visible only when JPEG selected):
+      - Quality slider (1-100), defaults from app settings
+      - Chroma subsampling options (4:4:4, 4:2:2, 4:2:0)
+      - Optimize Huffman checkbox
+    - Cancel and Regenerate buttons
+  → Settings are NOT persisted (one-time use)
+  → Defaults loaded from SharedPreferences via JpegSettingsDialog helpers
+
+GalleryFragment.regenerateSelectedImages()
+  → For each selected gallery item:
+    → Find original RAW file by matching base name (without extension)
+    → Search across all enabled RAW extensions in original directory
+    → If RAW found:
+      → Copy RAW file to app cache directory
+      → Convert to selected format using DNGConverter
+      → Save output to Pictures/Raw2DNG/ or Pictures/Raw2DNG/JPEG/
+      → Clean up cache files
+    → If RAW not found:
+      → Log warning, skip file
+  → Shows progress dialog during regeneration
+  → On completion:
+    → Shows toast with success/failure count
+    → Clears multi-select mode
+    → Refreshes gallery view
+    → Refreshes convert tab
 ```
 
 ### Output Directories
@@ -491,6 +527,14 @@ When making changes, verify:
 - [ ] JPEG conversion uses saved settings
 - [ ] Licenses dialog opens and displays all licenses
 - [ ] Licenses dialog is scrollable
+- [ ] Regenerate button appears in Gallery multi-select mode
+- [ ] Regenerate dialog shows format selection and JPEG settings
+- [ ] JPEG settings panel shows/hides based on format selection
+- [ ] Regenerate dialog defaults match app JPEG settings
+- [ ] Regenerate finds original RAW files and converts successfully
+- [ ] Regenerate shows progress dialog during conversion
+- [ ] Regenerate clears selection and refreshes gallery on completion
+- [ ] Regenerate reports count of successful/missing files
 
 ### Common Issues
 
