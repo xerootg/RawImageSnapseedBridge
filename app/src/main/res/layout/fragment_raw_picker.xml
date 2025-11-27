@@ -140,21 +140,40 @@
         android:background="?android:colorBackground"
         android:visibility="gone">
 
-        <!-- Header with title -->
-        <TextView
-            android:id="@+id/conversionTitle"
+        <!-- Header with title and toggle button -->
+        <LinearLayout
+            android:id="@+id/conversionHeader"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
             android:paddingStart="16dp"
-            android:paddingTop="16dp"
-            android:paddingEnd="16dp"
-            android:text="@string/converting_files"
-            android:textSize="18sp"
-            android:textStyle="bold"
-            android:textColor="?colorOnBackground"
+            android:paddingTop="12dp"
+            android:paddingEnd="8dp"
+            android:paddingBottom="4dp"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent" />
+            app:layout_constraintTop_toTopOf="parent">
+
+            <TextView
+                android:id="@+id/conversionTitle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/converting_files"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:textColor="?colorOnBackground" />
+
+            <Button
+                android:id="@+id/btnToggleView"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/show_log"
+                android:textSize="12sp"
+                style="@style/Widget.MaterialComponents.Button.TextButton" />
+
+        </LinearLayout>
 
         <!-- Thumbnail grid -->
         <androidx.recyclerview.widget.RecyclerView
@@ -167,7 +186,30 @@
             app:layout_constraintBottom_toTopOf="@id/checkAutoNavigate"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/conversionTitle" />
+            app:layout_constraintTop_toBottomOf="@id/conversionHeader" />
+
+        <!-- Log view (initially hidden) -->
+        <ScrollView
+            android:id="@+id/conversionLogScroll"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:layout_margin="8dp"
+            android:visibility="gone"
+            app:layout_constraintBottom_toTopOf="@id/checkAutoNavigate"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/conversionHeader">
+
+            <TextView
+                android:id="@+id/conversionLogText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:fontFamily="monospace"
+                android:textSize="12sp"
+                android:padding="8dp"
+                android:textColor="?colorOnBackground" />
+
+        </ScrollView>
 
         <!-- Auto-navigate checkbox -->
         <CheckBox

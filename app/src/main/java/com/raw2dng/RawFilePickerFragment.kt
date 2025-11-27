@@ -49,7 +49,12 @@ class RawFilePickerFragment : Fragment() {
     private var conversionCompletedSuccessfully = false  // Track if all conversions succeeded
     private val PREFS_NAME = "raw2dng_prefs"
     private val KEY_AUTO_NAVIGATE = "auto_navigate_gallery"
+    private val KEY_SHOW_LOG = "show_conversion_log"
     private val COUNTDOWN_SECONDS = 3
+    
+    // Log view
+    private var showingLog = false
+    private val logMessages = StringBuilder()
 
     // Filter options for the file picker
     enum class FileFilter {
@@ -236,6 +241,42 @@ class RawFilePickerFragment : Fragment() {
         conversionThumbnailAdapter = ConversionThumbnailAdapter()
         binding.conversionThumbnailGrid.layoutManager = GridLayoutManager(requireContext(), 3)
         binding.conversionThumbnailGrid.adapter = conversionThumbnailAdapter
+        
+        // Log/Thumbnails toggle - load saved preference
+        showingLog = prefs.getBoolean(KEY_SHOW_LOG, false)
+        updateLogToggleView()
+        binding.btnToggleView.setOnClickListener {
+            showingLog = !showingLog
+            prefs.edit().putBoolean(KEY_SHOW_LOG, showingLog).apply()
+            updateLogToggleView()
+        }
+    }
+    
+    private fun updateLogToggleView() {
+        if (showingLog) {
+            binding.conversionThumbnailGrid.visibility = View.GONE
+            binding.conversionLogScroll.visibility = View.VISIBLE
+            binding.btnToggleView.text = getString(R.string.show_thumbnails)
+            // Auto-scroll to bottom
+            binding.conversionLogScroll.post {
+                binding.conversionLogScroll.fullScroll(View.FOCUS_DOWN)
+            }
+        } else {
+            binding.conversionThumbnailGrid.visibility = View.VISIBLE
+            binding.conversionLogScroll.visibility = View.GONE
+            binding.btnToggleView.text = getString(R.string.show_log)
+        }
+    }
+    
+    private fun appendLog(message: String) {
+        logMessages.append(message).append("\n")
+        binding.conversionLogText.text = logMessages.toString()
+        // Auto-scroll if in log view
+        if (showingLog) {
+            binding.conversionLogScroll.post {
+                binding.conversionLogScroll.fullScroll(View.FOCUS_DOWN)
+            }
+        }
     }
 
     private fun loadRawFiles() {
@@ -465,6 +506,7 @@ class RawFilePickerFragment : Fragment() {
         val extension = if (outputFormat == OutputFormat.DNG) "dng" else "jpg"
 
         Log.d(tag, "Starting $formatName conversion of $fileCount file(s)...")
+        appendLog("Starting $formatName conversion of $fileCount file(s)...\n")
 
         val tasks = selectedFiles.mapNotNull { rawFile ->
             try {
@@ -478,6 +520,7 @@ class RawFilePickerFragment : Fragment() {
                 Log.e(tag, "Error preparing task for ${rawFile.uri}", e)
                 // Mark as error in thumbnail grid
                 conversionThumbnailAdapter.markError(rawFile.uri, e.message ?: "Unknown error")
+                appendLog("✗ ${rawFile.name}: ${e.message ?: "Unknown error"}")
                 null
             }
         }
@@ -491,6 +534,7 @@ class RawFilePickerFragment : Fragment() {
                         val task = tasks.getOrNull(current - 1)
                         task?.let {
                             conversionThumbnailAdapter.markInProgress(it.inputUri)
+                            appendLog("Converting: ${it.fileName}...")
                         }
                     }
                 }
@@ -510,6 +554,7 @@ class RawFilePickerFragment : Fragment() {
                         // Mark success in thumbnail grid
                         conversionThumbnailAdapter.markSuccess(result.task.inputUri)
                         Log.d(tag, "✓ ${result.task.fileName}")
+                        appendLog("✓ ${result.task.fileName}")
                         
                         // Immediately update the RawFileItem's conversion status
                         updateItemConversionStatus(result.task.inputUri, result.task.outputFormat)
@@ -517,6 +562,7 @@ class RawFilePickerFragment : Fragment() {
                         // Mark error in thumbnail grid
                         conversionThumbnailAdapter.markError(result.task.inputUri, result.errorMessage)
                         Log.e(tag, "✗ ${result.task.fileName}: ${result.errorMessage}")
+                        appendLog("✗ ${result.task.fileName}: ${result.errorMessage}")
                     }
                 }
             },
@@ -525,6 +571,7 @@ class RawFilePickerFragment : Fragment() {
                     val message = getString(R.string.conversion_complete, successful, failed)
                     binding.conversionStatus.text = message
                     binding.btnDone.isEnabled = true
+                    appendLog("\n$message")
                     
                     // Clear selection (status already updated per-item during conversion)
                     adapter.clearSelection()
@@ -569,6 +616,10 @@ class RawFilePickerFragment : Fragment() {
         binding.conversionOverlay.visibility = View.VISIBLE
         conversionThumbnailAdapter.clear()
         cancelCountdown()
+        // Clear log and reset view state
+        logMessages.clear()
+        binding.conversionLogText.text = ""
+        updateLogToggleView()
     }
 
     private fun showPickerContent() {

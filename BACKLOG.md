@@ -2,7 +2,6 @@
 ## high priority
 
 ### ux
-*) in conversion, a button next to Converting Files... should toggle between the thumbnails and the log messages, leaving the checkbox, overall progress bar, and done button in place. this setting should be persisted
 *) if the mediaapi is used to delete pictures, regardless of filter type, mediaapi asks permission to delete the files. do not additionally ask for permission as jpeg does now.
 *) screen rotation cancels whatever is running if converting, even if conversion is complete
 *) in multi-select mode in gallery, previewing the selected image(s) should be possible with a button in the top bar, and in preview there should be a button a the top allowing openwith, as well as selection and de-selection of images. gutter of images should be rendered, showing selected images with a green checkmark

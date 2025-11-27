@@ -56,7 +56,12 @@ MainActivity
 │   ├── File selection with thumbnails
 │   ├── Filter chips (All / Not DNG / Not JPEG)
 │   ├── Fullscreen image preview
-│   └── Conversion controls (DNG/JPEG/Both)
+│   ├── Conversion controls (DNG/JPEG)
+│   └── Conversion overlay with:
+│       ├── Thumbnail grid / Log toggle
+│       ├── Auto-navigate checkbox (persisted)
+│       ├── Progress bar
+│       └── Done button with countdown
 │
 └── GalleryFragment (Tab: Gallery)
     ├── Grid view of converted images
@@ -158,6 +163,21 @@ ConversionThumbnailAdapter
     - ERROR: Medium overlay (60%) + red error icon
   → Global progress bar at bottom with "X/Y" count
   → Thumbnail loading: OS ContentResolver → ThumbnailCache fallback
+
+Log View (toggle with "Log" button)
+  → Shows conversion log messages in monospace font
+  → Auto-scrolls to bottom on new messages
+  → Toggle persisted via SharedPreferences (KEY_SHOW_LOG)
+  → Messages: "Converting: filename...", "✓ filename", "✗ filename: error"
+
+Auto-Navigate Feature
+  → Checkbox: "Automatically go to Gallery on completion"
+  → Preference persisted via SharedPreferences (KEY_AUTO_NAVIGATE)
+  → If checked AND all conversions succeed:
+    → 3-second countdown displayed on Done button: "Done (3)", "Done (2)", "Done (1)"
+    → Auto-navigates to Gallery tab when countdown completes
+  → Checking box after completion also triggers countdown
+  → Unchecking cancels countdown
 ```
 
 #### Gallery Refresh
@@ -226,6 +246,9 @@ ImagePreviewDialog
 8. **Conversion Progress Grid**: Visual thumbnail grid showing per-file conversion status
 9. **Real-time Status Updates**: Conversion badges update immediately after conversion/deletion
 10. **Preview Conversion Badges**: Thumbnail strip shows D/J/D+J badges per image
+11. **Auto-Navigate to Gallery**: Optional 3-second countdown after successful conversion
+12. **Log/Thumbnail Toggle**: Switch between visual progress grid and text log during conversion
+13. **Tab Navigation Cleanup**: Conversion overlay clears when navigating away if done
 
 ### Color Matrix Handling
 
@@ -243,6 +266,9 @@ The app includes hardcoded color matrices for cameras not fully supported by Lib
 6. **MainActivity** holds references to both pickerFragment and galleryFragment for cross-tab communication
 7. **ThumbnailStripItem** carries conversion status (dng/jpeg booleans) for badge display
 8. **500ms delay** after deletion before refreshing Convert tab (ensures filesystem sync)
+9. **ViewPager2.OnPageChangeCallback** clears conversion overlay when switching tabs (if done)
+10. **SharedPreferences** persists: auto-navigate checkbox, log/thumbnail toggle preference
+11. **conversionCompletedSuccessfully** flag enables checkbox to trigger countdown after completion
 
 ### Testing Checklist
 
@@ -258,6 +284,10 @@ When making changes, verify:
 - [ ] Multi-select works in gallery
 - [ ] "Open in..." works for selected files
 - [ ] Preview thumbnail strip shows D/J badges correctly
+- [ ] Auto-navigate countdown works when checkbox is checked
+- [ ] Checking auto-navigate after completion triggers countdown
+- [ ] Log/Thumbnail toggle works during and after conversion
+- [ ] Tab switch clears conversion overlay when done
 
 ### Common Issues
 
