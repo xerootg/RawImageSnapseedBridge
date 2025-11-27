@@ -29,8 +29,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.io.FileOutputStream
-import java.util.UUID
 
 /**
  * Filter options for gallery view.
@@ -777,6 +775,10 @@ class GalleryFragment : Fragment() {
         }
     }
 
+    /**
+     * Show regenerate dialog, then navigate to Convert tab and start conversion.
+     * Uses the Convert fragment's conversion UI for consistent UX.
+     */
     private fun showRegenerateDialog() {
         val selectedItems = adapter.getSelectedItems()
         if (selectedItems.isEmpty()) {
@@ -784,43 +786,22 @@ class GalleryFragment : Fragment() {
             return
         }
         
-        val dialog = RegenerateDialog.newInstance()
-        dialog.setOnRegenerateListener(object : RegenerateDialog.OnRegenerateListener {
-            override fun onRegenerate(
-                outputFormat: OutputFormat,
-                jpegQuality: Int,
-                jpegChroma: Int,
-                jpegOptimize: Boolean
-            ) {
-                regenerateSelectedImages(selectedItems, outputFormat, jpegQuality, jpegChroma, jpegOptimize)
-            }
-        })
-        dialog.show(childFragmentManager, RegenerateDialog.TAG)
-    }
-    
-    private fun regenerateSelectedImages(
-        selectedItems: List<GalleryItem>,
-        outputFormat: OutputFormat,
-        jpegQuality: Int,
-        jpegChroma: Int,
-        jpegOptimize: Boolean
-    ) {
         viewLifecycleOwner.lifecycleScope.launch {
             // Find original RAW files for each selected item
-            val rawFiles = mutableListOf<Pair<GalleryItem, Uri>>()
+            val rawUris = mutableListOf<Uri>()
             val notFound = mutableListOf<String>()
             
             for (item in selectedItems) {
                 val baseName = item.name.substringBeforeLast('.')
                 val rawUri = findOriginalRaw(baseName)
                 if (rawUri != null) {
-                    rawFiles.add(Pair(item, rawUri))
+                    rawUris.add(rawUri)
                 } else {
                     notFound.add(item.name)
                 }
             }
             
-            if (rawFiles.isEmpty()) {
+            if (rawUris.isEmpty()) {
                 Toast.makeText(
                     requireContext(),
                     getString(R.string.regenerate_no_raw_files),
@@ -832,133 +813,35 @@ class GalleryFragment : Fragment() {
             if (notFound.isNotEmpty()) {
                 Toast.makeText(
                     requireContext(),
-                    getString(R.string.regenerate_found, rawFiles.size, selectedItems.size),
+                    getString(R.string.regenerate_found, rawUris.size, selectedItems.size),
                     Toast.LENGTH_SHORT
                 ).show()
             }
             
-            // Show progress dialog
-            val progressDialog = AlertDialog.Builder(requireContext())
-                .setTitle(R.string.regenerating)
-                .setMessage("0/${rawFiles.size}")
-                .setCancelable(false)
-                .create()
-            progressDialog.show()
-            
-            var completed = 0
-            var successful = 0
-            val converter = DNGConverter()
-            
-            for ((galleryItem, rawUri) in rawFiles) {
-                val result = withContext(Dispatchers.IO) {
-                    regenerateSingleFile(galleryItem, rawUri, outputFormat, jpegQuality, jpegChroma, jpegOptimize, converter)
-                }
-                
-                completed++
-                if (result) successful++
-                
-                progressDialog.setMessage("$completed/${rawFiles.size}")
-            }
-            
-            progressDialog.dismiss()
-            
-            Toast.makeText(
-                requireContext(),
-                "Regenerated $successful of ${rawFiles.size} files",
-                Toast.LENGTH_SHORT
-            ).show()
-            
-            // Exit multi-select mode and refresh
-            adapter.clearSelection()
-            loadImages()
-            
-            // Refresh convert tab
-            (activity as? MainActivity)?.refreshConvertTab()
-        }
-    }
-    
-    private suspend fun regenerateSingleFile(
-        galleryItem: GalleryItem,
-        rawUri: Uri,
-        outputFormat: OutputFormat,
-        jpegQuality: Int,
-        jpegChroma: Int,
-        jpegOptimize: Boolean,
-        converter: DNGConverter
-    ): Boolean = withContext(Dispatchers.IO) {
-        try {
-            val context = requireContext()
-            val cacheDir = context.cacheDir
-            val baseName = galleryItem.name.substringBeforeLast('.')
-            val uniqueId = UUID.randomUUID().toString().take(8)
-            
-            // Copy RAW file to cache
-            val rawExtension = getRawExtension(rawUri)
-            val cacheInputFile = File(cacheDir, "${baseName}_${uniqueId}.$rawExtension")
-            context.contentResolver.openInputStream(rawUri)?.use { input ->
-                FileOutputStream(cacheInputFile).use { output ->
-                    input.copyTo(output)
-                }
-            }
-            
-            // Prepare output file
-            val outputExtension = if (outputFormat == OutputFormat.DNG) "dng" else "jpg"
-            val cacheOutputFile = File(cacheDir, "${baseName}_${uniqueId}.$outputExtension")
-            
-            // Convert
-            val errorMessage = when (outputFormat) {
-                OutputFormat.DNG -> converter.convertToDNG(cacheInputFile.absolutePath, cacheOutputFile.absolutePath)
-                OutputFormat.JPEG -> {
-                    val result = converter.convertToJPEG(
-                        cacheInputFile.absolutePath,
-                        cacheOutputFile.absolutePath,
+            // Show the regenerate dialog to get format and settings
+            val dialog = RegenerateDialog.newInstance()
+            dialog.setOnRegenerateListener(object : RegenerateDialog.OnRegenerateListener {
+                override fun onRegenerate(
+                    outputFormat: OutputFormat,
+                    jpegQuality: Int,
+                    jpegChroma: Int,
+                    jpegOptimize: Boolean
+                ) {
+                    // Clear selection before navigating
+                    adapter.clearSelection()
+                    
+                    // Navigate to Convert tab and start conversion with the selected settings
+                    (activity as? MainActivity)?.navigateToConvertAndStart(
+                        rawUris,
+                        outputFormat,
                         jpegQuality,
                         jpegChroma,
                         jpegOptimize
                     )
-                    // If JPEG conversion succeeded, write EXIF data from the source RAW
-                    if (result.isEmpty()) {
-                        ExifData.writeExifToJpeg(cacheInputFile.absolutePath, cacheOutputFile.absolutePath)
-                    }
-                    result
                 }
-            }
-            
-            if (errorMessage.isNotEmpty()) {
-                Log.e(tag, "Regenerate failed: $errorMessage")
-                cacheInputFile.delete()
-                cacheOutputFile.delete()
-                return@withContext false
-            }
-            
-            // Save to public storage (overwrites existing file with same name)
-            val publicFileName = "$baseName.$outputExtension"
-            saveToPublicStorage(cacheOutputFile, outputFormat, publicFileName)
-            
-            // Clean up cache
-            cacheInputFile.delete()
-            cacheOutputFile.delete()
-            
-            true
-        } catch (e: Exception) {
-            Log.e(tag, "Regenerate error: ${e.message}", e)
-            false
+            })
+            dialog.show(childFragmentManager, RegenerateDialog.TAG)
         }
-    }
-    
-    private fun getRawExtension(uri: Uri): String {
-        val cursor = requireContext().contentResolver.query(
-            uri,
-            arrayOf(MediaStore.MediaColumns.DISPLAY_NAME),
-            null, null, null
-        )
-        cursor?.use {
-            if (it.moveToFirst()) {
-                val name = it.getString(0)
-                return name.substringAfterLast('.', "raw")
-            }
-        }
-        return "raw"
     }
     
     private suspend fun findOriginalRaw(baseName: String): Uri? = withContext(Dispatchers.IO) {

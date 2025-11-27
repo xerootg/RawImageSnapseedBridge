@@ -89,6 +89,33 @@ class RawFileAdapter(
         }
     }
 
+    /**
+     * Select files by their URIs. Clears existing selection first.
+     * Only selects URIs that exist in the current list and are not dimmed.
+     * @return The number of files successfully selected
+     */
+    fun selectByUris(uris: List<Uri>): Int {
+        selectedUris.clear()
+        val uriSet = uris.toSet()
+        var count = 0
+        currentList.forEach { item ->
+            if (uriSet.contains(item.uri) && !item.isDimmed) {
+                selectedUris.add(item.uri)
+                count++
+            }
+        }
+        notifyDataSetChanged()
+        return count
+    }
+
+    /**
+     * Find the position of the first item matching one of the given URIs.
+     * @return The position, or -1 if not found
+     */
+    fun findPositionByUri(uri: Uri): Int {
+        return currentList.indexOfFirst { it.uri == uri }
+    }
+
     fun getSelectedCount(): Int = selectedUris.size
 
     inner class ViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {

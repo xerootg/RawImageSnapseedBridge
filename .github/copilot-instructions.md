@@ -146,7 +146,7 @@ com.raw2dng/
 ├── RawTypesDialogFragment.kt # Hierarchical RAW format selection dialog
 ├── JpegSettingsDialog.kt     # JPEG conversion settings (quality, chroma, optimize)
 ├── LicensesDialog.kt         # Open source licenses display
-├── RegenerateDialog.kt       # Regeneration settings dialog (one-time settings)
+├── RegenerateDialog.kt       # Format/settings dialog for regeneration (navigates to Convert tab)
 ├── ExifData.kt               # EXIF/metadata extraction via LibRaw JNI (unified for RAW/DNG/JPEG)
 └── FullscreenImageActivity.kt # Fullscreen RAW preview
 ```
@@ -347,34 +347,21 @@ GalleryFragment.previewSelectedImages()
 
 ```
 GalleryFragment.showRegenerateDialog()
-  → Opens RegenerateDialog with selected gallery items
-  → Dialog shows:
-    - Format selection: DNG or JPEG radio buttons
-    - JPEG settings panel (visible only when JPEG selected):
-      - Quality slider (1-100), defaults from app settings
-      - Chroma subsampling options (4:4:4, 4:2:2, 4:2:0)
-      - Optimize Huffman checkbox
-    - Cancel and Regenerate buttons
-  → Settings are NOT persisted (one-time use)
-  → Defaults loaded from SharedPreferences via JpegSettingsDialog helpers
-
-GalleryFragment.regenerateSelectedImages()
+  → User selects gallery items and taps "Regenerate" button
   → For each selected gallery item:
     → Find original RAW file by matching base name (without extension)
-    → Search across all enabled RAW extensions in original directory
-    → If RAW found:
-      → Copy RAW file to app cache directory
-      → Convert to selected format using DNGConverter
-      → Save output to Pictures/Raw2DNG/ or Pictures/Raw2DNG/JPEG/
-      → Clean up cache files
-    → If RAW not found:
-      → Log warning, skip file
-  → Shows progress dialog during regeneration
-  → On completion:
-    → Shows toast with success/failure count
-    → Clears multi-select mode
-    → Refreshes gallery view
-    → Refreshes convert tab
+    → Search across all enabled RAW extensions
+  → If no RAW files found: Show error toast
+  → If some RAW files not found: Show partial match toast
+  → Show RegenerateDialog with format selection (DNG/JPEG) and JPEG settings
+  → User configures settings and taps "Regenerate"
+  → Clear gallery selection
+  → Navigate to Convert tab via MainActivity.navigateToConvertAndStart()
+  → RawFilePickerFragment.selectFilesAndStartConversion():
+    → Pre-selects the RAW files
+    → Automatically starts conversion with the chosen format/settings
+    → Shows conversion progress UI (thumbnail grid, progress bar, log)
+  → User sees full conversion progress in Convert tab
 ```
 
 ### Output Directories
@@ -730,13 +717,12 @@ When making changes, verify:
 - [ ] Multi-file JPEG conversion does NOT trigger share (navigates to Gallery instead)
 - [ ] DNG conversion does NOT trigger share sheet
 - [ ] Regenerate button appears in Gallery multi-select mode
+- [ ] Regenerate finds original RAW files and shows format dialog
 - [ ] Regenerate dialog shows format selection and JPEG settings
-- [ ] JPEG settings panel shows/hides based on format selection
-- [ ] Regenerate dialog defaults match app JPEG settings
-- [ ] Regenerate finds original RAW files and converts successfully
-- [ ] Regenerate shows progress dialog during conversion
-- [ ] Regenerate clears selection and refreshes gallery on completion
-- [ ] Regenerate reports count of successful/missing files
+- [ ] Regenerate navigates to Convert tab after confirming
+- [ ] Regenerate auto-starts conversion with selected settings
+- [ ] Regenerate shows conversion progress UI in Convert tab
+- [ ] Regenerate reports when some RAW files not found
 - [ ] Gallery thumbnails show file size overlay
 - [ ] Gallery selection summary shows total size
 - [ ] Gallery preview shows file size next to filename

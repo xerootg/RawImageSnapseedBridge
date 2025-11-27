@@ -2,6 +2,7 @@ package com.raw2dng
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
@@ -133,6 +134,42 @@ class MainActivity : AppCompatActivity() {
     fun navigateToGallery(filterFormat: OutputFormat) {
         galleryFragment?.setFilter(filterFormat)
         binding.viewPager.currentItem = 1
+    }
+    
+    /**
+     * Navigate to Convert tab and pre-select the specified RAW files.
+     * Used by Gallery's regenerate feature to re-convert files.
+     * @param rawUris The URIs of the RAW files to select
+     */
+    fun navigateToConvertWithSelection(rawUris: List<Uri>) {
+        binding.viewPager.currentItem = 0
+        // Use post to ensure the fragment is fully visible before selecting
+        binding.viewPager.post {
+            pickerFragment?.selectFilesByUris(rawUris)
+        }
+    }
+    
+    /**
+     * Navigate to Convert tab, pre-select the specified RAW files, and auto-start conversion.
+     * Used by Gallery's regenerate feature to re-convert files with specific settings.
+     * @param rawUris The URIs of the RAW files to select
+     * @param outputFormat The format to convert to (DNG or JPEG)
+     * @param jpegQuality JPEG quality (1-100), only used if outputFormat is JPEG
+     * @param jpegChroma JPEG chroma subsampling, only used if outputFormat is JPEG
+     * @param jpegOptimize Whether to optimize JPEG Huffman tables, only used if outputFormat is JPEG
+     */
+    fun navigateToConvertAndStart(
+        rawUris: List<Uri>,
+        outputFormat: OutputFormat,
+        jpegQuality: Int = 95,
+        jpegChroma: Int = DNGConverter.CHROMA_SUBSAMPLING_444,
+        jpegOptimize: Boolean = true
+    ) {
+        binding.viewPager.currentItem = 0
+        // Use post to ensure the fragment is fully visible before selecting and starting
+        binding.viewPager.post {
+            pickerFragment?.selectFilesAndStartConversion(rawUris, outputFormat, jpegQuality, jpegChroma, jpegOptimize)
+        }
     }
 
     private inner class TabAdapter(activity: AppCompatActivity) : FragmentStateAdapter(activity) {

@@ -163,6 +163,69 @@ class RawFilePickerFragment : Fragment() {
         loadRawFiles()
     }
 
+    /**
+     * Select files by their URIs and scroll to the first selected file.
+     * This is used when navigating from Gallery to re-convert specific files.
+     * @param uris The URIs of the RAW files to select
+     */
+    fun selectFilesByUris(uris: List<Uri>) {
+        if (_binding == null || uris.isEmpty()) return
+        
+        // Clear existing selection and select the specified files
+        val selectedCount = adapter.selectByUris(uris)
+        
+        if (selectedCount > 0) {
+            // Scroll to the first selected item
+            val firstUri = uris.first()
+            val position = adapter.findPositionByUri(firstUri)
+            if (position >= 0) {
+                binding.rawFilesRecycler.scrollToPosition(position)
+            }
+            
+            // Update the selection UI
+            updateSelectionUI()
+        }
+    }
+    
+    /**
+     * Select files by their URIs and immediately start conversion with the specified settings.
+     * This is used by Gallery's regenerate feature to re-convert files.
+     * @param uris The URIs of the RAW files to select and convert
+     * @param outputFormat The format to convert to (DNG or JPEG)
+     * @param jpegQuality JPEG quality (1-100), only used if outputFormat is JPEG
+     * @param jpegChroma JPEG chroma subsampling, only used if outputFormat is JPEG
+     * @param jpegOptimize Whether to optimize JPEG Huffman tables, only used if outputFormat is JPEG
+     */
+    fun selectFilesAndStartConversion(
+        uris: List<Uri>,
+        outputFormat: OutputFormat,
+        jpegQuality: Int = 95,
+        jpegChroma: Int = DNGConverter.CHROMA_SUBSAMPLING_444,
+        jpegOptimize: Boolean = true
+    ) {
+        if (_binding == null || uris.isEmpty()) return
+        
+        // Select the specified files
+        val selectedCount = adapter.selectByUris(uris)
+        
+        if (selectedCount > 0) {
+            // Scroll to the first selected item
+            val firstUri = uris.first()
+            val position = adapter.findPositionByUri(firstUri)
+            if (position >= 0) {
+                binding.rawFilesRecycler.scrollToPosition(position)
+            }
+            
+            // Get the selected RawFileItems
+            val selectedFiles = adapter.getSelectedItems()
+            
+            if (selectedFiles.isNotEmpty()) {
+                // Start conversion with the specified settings
+                startConversionWithSettings(selectedFiles, outputFormat, jpegQuality, jpegChroma, jpegOptimize)
+            }
+        }
+    }
+
     private fun setupUI() {
         adapter = RawFileAdapter(
             onSelectionToggle = { item ->
@@ -526,6 +589,24 @@ class RawFilePickerFragment : Fragment() {
     // === Conversion Logic ===
 
     private fun startConversion(selectedFiles: List<RawFileItem>, outputFormat: OutputFormat) {
+        // Use default JPEG settings from preferences
+        val jpegQuality = JpegSettingsDialog.getJpegQuality(requireContext())
+        val jpegChroma = JpegSettingsDialog.getJpegChroma(requireContext())
+        val jpegOptimize = JpegSettingsDialog.getJpegOptimize(requireContext())
+        startConversionWithSettings(selectedFiles, outputFormat, jpegQuality, jpegChroma, jpegOptimize)
+    }
+    
+    /**
+     * Start conversion with explicit JPEG settings.
+     * This is the main conversion entry point that handles all conversion logic.
+     */
+    private fun startConversionWithSettings(
+        selectedFiles: List<RawFileItem>,
+        outputFormat: OutputFormat,
+        jpegQuality: Int,
+        jpegChroma: Int,
+        jpegOptimize: Boolean
+    ) {
         if (selectedFiles.isEmpty()) return
         
         // Reset the success flag and warning count for new conversion
@@ -625,11 +706,6 @@ class RawFilePickerFragment : Fragment() {
                 null
             }
         }
-
-        // Read JPEG settings from preferences
-        val jpegQuality = JpegSettingsDialog.getJpegQuality(requireContext())
-        val jpegChroma = JpegSettingsDialog.getJpegChroma(requireContext())
-        val jpegOptimize = JpegSettingsDialog.getJpegOptimize(requireContext())
 
         conversionQueue = ConversionQueue(
             converter = converter,
