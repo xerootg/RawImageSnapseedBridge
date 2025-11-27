@@ -230,40 +230,63 @@ class SettingsFragment : Fragment() {
         // Create uppercase labels for display
         val displayLabels = ALL_RAW_EXTENSIONS.map { it.uppercase() }.toTypedArray()
         
-        MaterialAlertDialogBuilder(requireContext())
+        val dialog = MaterialAlertDialogBuilder(requireContext())
             .setTitle(R.string.raw_types_dialog_title)
             .setMultiChoiceItems(displayLabels, selectedTypes) { _, which, isChecked ->
                 selectedTypes[which] = isChecked
             }
-            .setPositiveButton(R.string.done) { _, _ ->
-                updateRawTypesButtonText()
-                saveSettings()
-                notifySettingsChanged()
+            .setPositiveButton(R.string.done, null) // Set to null, we'll override below
+            .setNeutralButton(R.string.select_all, null) // Set to null, we'll override below
+            .setNegativeButton(R.string.clear_all, null) // Set to null, we'll override below
+            .create()
+        
+        dialog.setOnShowListener {
+            // Override Done button to require at least one selection
+            dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                if (selectedTypes.none { it }) {
+                    android.widget.Toast.makeText(
+                        requireContext(),
+                        R.string.raw_types_select_one,
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                } else {
+                    updateRawTypesButtonText()
+                    saveSettings()
+                    notifySettingsChanged()
+                    dialog.dismiss()
+                }
             }
-            .setNeutralButton(R.string.select_all) { dialog, _ ->
-                // Select all
+            
+            // Override Select All button
+            dialog.getButton(android.app.AlertDialog.BUTTON_NEUTRAL).setOnClickListener {
                 for (i in selectedTypes.indices) {
                     selectedTypes[i] = true
                 }
+                // Update the checkboxes in the dialog
+                val listView = dialog.listView
+                for (i in selectedTypes.indices) {
+                    listView.setItemChecked(i, true)
+                }
                 updateRawTypesButtonText()
                 saveSettings()
                 notifySettingsChanged()
                 dialog.dismiss()
             }
-            .setNegativeButton(R.string.clear_all) { dialog, _ ->
-                // Deselect all (but keep at least one)
+            
+            // Override Clear All button - don't dismiss, just clear selections
+            dialog.getButton(android.app.AlertDialog.BUTTON_NEGATIVE).setOnClickListener {
                 for (i in selectedTypes.indices) {
                     selectedTypes[i] = false
                 }
-                // Keep first one selected to prevent empty selection
-                if (selectedTypes.none { it }) {
-                    selectedTypes[0] = true
+                // Update the checkboxes in the dialog
+                val listView = dialog.listView
+                for (i in selectedTypes.indices) {
+                    listView.setItemChecked(i, false)
                 }
                 updateRawTypesButtonText()
-                saveSettings()
-                notifySettingsChanged()
-                dialog.dismiss()
             }
-            .show()
+        }
+        
+        dialog.show()
     }
 }
