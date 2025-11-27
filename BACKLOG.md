@@ -6,15 +6,17 @@
 *) conversion list should be filterable by exif data like camera, lens, etc
 
 ### quick actions
-*) add a setting which allows single conversions to dng to auto open in snapseeed
+*) add a setting which allows single conversions to dng to auto open in snapseeed instead of navigating to gallery
+*) add a setting which allows single conversions to jpeg to auto prompt how to share instead of navigating to gallery
 
 ## low priority
+*) convert view does not navigate to jpeg after converting to jpeg
+*) all possible raw metadata from libraw_data_t should be rendered in the advanced exif viewer for raw files, including manufacture notes, common and manufacturer specific.
 *) I see there's AF info, please render a green box on the convert preview where the af location was if the data is available - libraw_afinfo_item_t, in libraw_metadata_common_t, part of makernotes.
-*) overwrite does not overwrite - it adds a file with the same name. delete the old file first.
 *) converted DNG thumbnails are not rotated correctly.
 *) button style for regen/preview/open/delete is smushed and also mismatched from the rest of the UI
 *) better reprocess dialogue, maybe reuse existing conversion view
-*) playstore???
+*) playstore??? f-droid???
 *) a button in settings after the licenses button to navigate to the github for this project
 *) source libraw from the jetpack source
 *) find a way to handle license credits semi-automatically

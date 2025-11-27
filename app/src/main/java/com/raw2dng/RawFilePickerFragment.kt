@@ -48,6 +48,7 @@ class RawFilePickerFragment : Fragment() {
     // Auto-navigate countdown
     private var countdownJob: Job? = null
     private var conversionCompletedSuccessfully = false  // Track if all conversions succeeded
+    private var conversionWarningCount = 0  // Track warnings (e.g., couldn't overwrite)
     private val PREFS_NAME = "raw2dng_prefs"
     private val KEY_AUTO_NAVIGATE = "auto_navigate_gallery"
     private val KEY_SHOW_LOG = "show_conversion_log"
@@ -63,6 +64,13 @@ class RawFilePickerFragment : Fragment() {
         ALL,
         NOT_DNG,
         NOT_JPEG
+    }
+    
+    // Save result to track warnings
+    sealed class SaveResult {
+        data class Success(val uri: Uri) : SaveResult()
+        data class SuccessWithWarning(val uri: Uri, val warning: String) : SaveResult()
+        object Failed : SaveResult()
     }
 
     // Conversion
@@ -519,8 +527,9 @@ class RawFilePickerFragment : Fragment() {
     private fun startConversion(selectedFiles: List<RawFileItem>, outputFormat: OutputFormat) {
         if (selectedFiles.isEmpty()) return
         
-        // Reset the success flag for new conversion
+        // Reset the success flag and warning count for new conversion
         conversionCompletedSuccessfully = false
+        conversionWarningCount = 0
         
         // Track the format for navigation after completion
         lastConversionFormat = outputFormat
@@ -643,17 +652,36 @@ class RawFilePickerFragment : Fragment() {
                         val outputExtension = if (result.task.outputFormat == OutputFormat.DNG) "dng" else "jpg"
                         val publicFileName = "$originalBaseName.$outputExtension"
                         
-                        saveToPublicStorage(outputFile, result.task.outputFormat, publicFileName)
+                        val saveResult = saveToPublicStorage(outputFile, result.task.outputFormat, publicFileName)
                         outputFile.delete()
                         inputFile.delete()  // Clean up cached input file
                         
-                        // Mark success in thumbnail grid
-                        conversionThumbnailAdapter.markSuccess(result.task.inputUri)
-                        Log.d(tag, "✓ ${result.task.fileName}")
-                        appendLog("✓ ${result.task.fileName}")
+                        when (saveResult) {
+                            is SaveResult.Success -> {
+                                // Mark success in thumbnail grid
+                                conversionThumbnailAdapter.markSuccess(result.task.inputUri)
+                                Log.d(tag, "✓ ${result.task.fileName}")
+                                appendLog("✓ ${result.task.fileName}")
+                            }
+                            is SaveResult.SuccessWithWarning -> {
+                                // Mark success but log warning
+                                conversionThumbnailAdapter.markSuccess(result.task.inputUri)
+                                conversionWarningCount++
+                                Log.w(tag, "⚠ ${result.task.fileName}: ${saveResult.warning}")
+                                appendLog("⚠ ${result.task.fileName}: ${saveResult.warning}")
+                            }
+                            is SaveResult.Failed -> {
+                                // Mark error in thumbnail grid
+                                conversionThumbnailAdapter.markError(result.task.inputUri, "Failed to save file")
+                                Log.e(tag, "✗ ${result.task.fileName}: Failed to save file")
+                                appendLog("✗ ${result.task.fileName}: Failed to save file")
+                            }
+                        }
                         
-                        // Immediately update the RawFileItem's conversion status
-                        updateItemConversionStatus(result.task.inputUri, result.task.outputFormat)
+                        // Immediately update the RawFileItem's conversion status (even with warning, file was saved)
+                        if (saveResult !is SaveResult.Failed) {
+                            updateItemConversionStatus(result.task.inputUri, result.task.outputFormat)
+                        }
                     } else {
                         // Clean up cache files even on failure
                         outputFile.delete()
@@ -681,10 +709,30 @@ class RawFilePickerFragment : Fragment() {
                         appendLog("\n$message")
                         // Don't enable Done or auto-navigate yet
                     } else {
-                        val message = getString(R.string.conversion_complete, successful, failed)
+                        // Check if there were any warnings
+                        val hasWarnings = conversionWarningCount > 0
+                        
+                        val message = if (hasWarnings) {
+                            if (conversionWarningCount == 1) {
+                                "Completed with 1 warning. See log for details."
+                            } else {
+                                "Completed with $conversionWarningCount warnings. See log for details."
+                            }
+                        } else {
+                            getString(R.string.conversion_complete, successful, failed)
+                        }
+                        
                         binding.conversionStatus.text = message
                         binding.btnDone.isEnabled = true
-                        appendLog("\n$message")
+                        appendLog("\n" + getString(R.string.conversion_complete, successful, failed))
+                        
+                        // Change progress bar color to orange if there were warnings
+                        if (hasWarnings) {
+                            binding.conversionProgressBar.progressTintList = 
+                                android.content.res.ColorStateList.valueOf(
+                                    ContextCompat.getColor(requireContext(), android.R.color.holo_orange_dark)
+                                )
+                        }
                         
                         // Clear selection (status already updated per-item during conversion)
                         adapter.clearSelection()
@@ -696,9 +744,10 @@ class RawFilePickerFragment : Fragment() {
                         (activity as? MainActivity)?.refreshGallery()
                         
                         // Track if conversion completed successfully (for checkbox trigger)
-                        conversionCompletedSuccessfully = (failed == 0 && successful > 0)
+                        // Don't count as successful if there were warnings - no auto-navigate
+                        conversionCompletedSuccessfully = (failed == 0 && successful > 0 && !hasWarnings)
                         
-                        // Auto-navigate if checkbox is checked AND all conversions succeeded
+                        // Auto-navigate if checkbox is checked AND all conversions succeeded without warnings
                         if (binding.checkAutoNavigate.isChecked && conversionCompletedSuccessfully) {
                             startAutoNavigateCountdown()
                         }
@@ -737,6 +786,8 @@ class RawFilePickerFragment : Fragment() {
         logMessages.clear()
         binding.conversionLogText.text = ""
         updateLogToggleView()
+        // Reset progress bar color to default (primary color)
+        binding.conversionProgressBar.progressTintList = null
     }
 
     private fun showPickerContent() {
@@ -806,7 +857,7 @@ class RawFilePickerFragment : Fragment() {
         return cacheFile.absolutePath
     }
 
-    private fun saveToPublicStorage(sourceFile: File, outputFormat: OutputFormat = OutputFormat.DNG, displayName: String = sourceFile.name): Uri? {
+    private fun saveToPublicStorage(sourceFile: File, outputFormat: OutputFormat = OutputFormat.DNG, displayName: String = sourceFile.name): SaveResult {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             saveToMediaStore(sourceFile, outputFormat, displayName)
         } else {
@@ -814,7 +865,7 @@ class RawFilePickerFragment : Fragment() {
         }
     }
 
-    private fun saveToMediaStore(sourceFile: File, outputFormat: OutputFormat, displayName: String): Uri? {
+    private fun saveToMediaStore(sourceFile: File, outputFormat: OutputFormat, displayName: String): SaveResult {
         val mimeType = when (outputFormat) {
             OutputFormat.DNG -> "image/x-adobe-dng"
             OutputFormat.JPEG -> "image/jpeg"
@@ -823,6 +874,51 @@ class RawFilePickerFragment : Fragment() {
         val relativePath = when (outputFormat) {
             OutputFormat.DNG -> "${Environment.DIRECTORY_PICTURES}/Raw2DNG"
             OutputFormat.JPEG -> "${Environment.DIRECTORY_PICTURES}/Raw2DNG/JPEG"
+        }
+        
+        // Track if we couldn't overwrite an existing file
+        var couldNotOverwrite = false
+        
+        // Check for existing file with the same name and try to delete/overwrite it
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            findExistingFile(displayName, relativePath)?.let { existingUri ->
+                // Try to delete the existing file first
+                var deleted = false
+                try {
+                    val rowsDeleted = requireContext().contentResolver.delete(existingUri, null, null)
+                    deleted = rowsDeleted > 0
+                    if (deleted) {
+                        Log.d(tag, "Deleted existing file before overwrite: $displayName")
+                    }
+                } catch (e: android.app.RecoverableSecurityException) {
+                    // File was created by a different app/installation - can't delete without user consent
+                    Log.d(tag, "Cannot delete file (not owner): $displayName")
+                } catch (e: SecurityException) {
+                    // Other security exception
+                    Log.d(tag, "Security exception deleting file: $displayName")
+                }
+                
+                // If we couldn't delete, try to overwrite in place
+                if (!deleted) {
+                    try {
+                        requireContext().contentResolver.openOutputStream(existingUri, "wt")?.use { outputStream ->
+                            sourceFile.inputStream().use { inputStream ->
+                                inputStream.copyTo(outputStream)
+                            }
+                        }
+                        Log.d(tag, "Overwrote existing file: $displayName")
+                        return SaveResult.Success(existingUri)
+                    } catch (e: android.app.RecoverableSecurityException) {
+                        // Also can't overwrite - file created by different app
+                        Log.w(tag, "Cannot overwrite '$displayName' - file owned by another app. Delete from Gallery first.")
+                        couldNotOverwrite = true
+                    } catch (e: SecurityException) {
+                        Log.w(tag, "Security exception overwriting '$displayName'. Delete from Gallery first.")
+                        couldNotOverwrite = true
+                    }
+                    // Fall through to create new file (will get "(1)" suffix from MediaStore)
+                }
+            }
         }
         
         val contentValues = ContentValues().apply {
@@ -846,16 +942,21 @@ class RawFilePickerFragment : Fragment() {
                 requireContext().contentResolver.update(it, contentValues, null, null)
 
                 Log.d(tag, "Saved to MediaStore: $it")
-                it
+                
+                if (couldNotOverwrite) {
+                    SaveResult.SuccessWithWarning(it, "Could not overwrite '$displayName' - file saved with different name. Delete old file from Gallery.")
+                } else {
+                    SaveResult.Success(it)
+                }
             } catch (e: Exception) {
                 Log.e(tag, "Error saving to MediaStore", e)
                 requireContext().contentResolver.delete(it, null, null)
-                null
+                SaveResult.Failed
             }
-        }
+        } ?: SaveResult.Failed
     }
 
-    private fun saveToPublicDirectory(sourceFile: File, outputFormat: OutputFormat, displayName: String): Uri? {
+    private fun saveToPublicDirectory(sourceFile: File, outputFormat: OutputFormat, displayName: String): SaveResult {
         return try {
             val picturesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
             val subDir = when (outputFormat) {
@@ -887,11 +988,38 @@ class RawFilePickerFragment : Fragment() {
                 Log.d(tag, "MediaScanner scanned: $path -> $uri")
             }
 
-            Uri.fromFile(destFile)
+            SaveResult.Success(Uri.fromFile(destFile))
         } catch (e: Exception) {
             Log.e(tag, "Error saving to public directory", e)
-            null
+            SaveResult.Failed
         }
+    }
+
+    /**
+     * Find an existing file in MediaStore by display name and relative path.
+     * Returns the Uri if found, null otherwise.
+     */
+    private fun findExistingFile(displayName: String, relativePath: String): Uri? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
+        
+        val collection = MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+        val projection = arrayOf(MediaStore.Images.Media._ID)
+        val selection = "${MediaStore.Images.Media.DISPLAY_NAME} = ? AND ${MediaStore.Images.Media.RELATIVE_PATH} = ?"
+        // MediaStore stores relative path with trailing slash
+        val selectionArgs = arrayOf(displayName, "$relativePath/")
+        
+        val cursor = requireContext().contentResolver.query(
+            collection, projection, selection, selectionArgs, null
+        )
+        
+        cursor?.use {
+            if (it.moveToFirst()) {
+                val id = it.getLong(it.getColumnIndexOrThrow(MediaStore.Images.Media._ID))
+                return Uri.withAppendedPath(collection, id.toString())
+            }
+        }
+        
+        return null
     }
 
     private fun showSettingsDialog() {

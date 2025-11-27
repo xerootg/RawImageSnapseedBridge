@@ -398,9 +398,9 @@ GalleryFragment.regenerateSelectedImages()
 19. **Settings Dialog**: Gear icon in both tabs opens settings with configurable auto-navigate timeout
 20. **Hide/Dim Converted Images**: Optional filter to hide or gray out already-converted images
 21. **JPEG Settings Dialog**: Configure default JPEG quality, chroma subsampling, and Huffman optimization
-17. **File Size Display**: Gallery thumbnails show file size overlay; selection summary shows total size
-18. **Preview File Size**: Gallery preview shows current image file size and total selected size
-19. **EXIF/Metadata Overlay**: Info button in preview shows detailed image metadata in scrollable overlay
+22. **File Size Display**: Gallery thumbnails show file size overlay; selection summary shows total size
+23. **Preview File Size**: Gallery preview shows current image file size and total selected size
+24. **EXIF/Metadata Overlay**: Info button in preview shows detailed image metadata in scrollable overlay
 
 ### JPEG Encoding Settings
 
@@ -521,6 +521,8 @@ SharedPreferences Keys:
 31. **extractMetadataJson()**: JNI method in libraw_reader.cpp returns JSON with complete metadata
 32. **EXIF transfer to DNG**: Complete EXIF written via DNG SDK including GPS, exposure program, metering mode
 33. **EXIF transfer to JPEG**: After JPEG conversion, ExifData.writeExifToJpeg() copies EXIF from source RAW
+34. **Overwrite on conversion**: saveToMediaStore() tries to delete existing file via findExistingFile(), then overwrites in place if delete fails. Only works for files created by current app installation (Android Scoped Storage limitation). Files from previous installations must be deleted from Gallery first.
+35. **Conversion warnings**: SaveResult sealed class tracks success/warning/failure. Warnings (e.g., couldn't overwrite) are logged, progress bar turns orange, auto-navigate is cancelled, and status shows "Completed with X warning(s). See log for details."
 
 ### EXIF Data Transfer
 
@@ -651,6 +653,8 @@ When making changes, verify:
 - [ ] Tapping multiple overwrites during conversion processes all of them
 - [ ] Done button disabled until all confirmations resolved or converted
 - [ ] Parallel conversion of multiple files produces non-corrupt output
+- [ ] Overwrite replaces existing file for files created by current app installation
+- [ ] Files from previous installations: delete from Gallery first, then re-convert
 - [ ] Changing gallery filter clears any active selection
 - [ ] Gallery preview button opens fullscreen preview
 - [ ] Gallery preview shows checkmarks on selected items
@@ -704,3 +708,4 @@ When making changes, verify:
 6. **Files saved with UUID in name**: Check that `saveToPublicStorage()` receives the original filename, not the cache filename
 7. **RAW files not appearing**: Check settings for enabled RAW types, verify extension is in ALL_RAW_EXTENSIONS
 8. **Missing EXIF in JPEG**: Check that ExifData.writeExifToJpeg() is called after conversion in ConversionQueue
+9. **File gets "(1)" suffix on overwrite**: File was created by previous app installation. Android Scoped Storage prevents modifying files not owned by the current app. Delete from Gallery first using the clear/delete feature (uses `MediaStore.createDeleteRequest()` for system confirmation), then re-convert.
