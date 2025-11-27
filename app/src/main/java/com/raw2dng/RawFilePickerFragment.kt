@@ -158,7 +158,7 @@ class RawFilePickerFragment : Fragment() {
                 adapter.toggleSelection(item)
                 updateSelectionUI()
             },
-            onThumbnailClick = { item ->
+            onDoubleTap = { item ->
                 showImagePreview(item)
             }
         )

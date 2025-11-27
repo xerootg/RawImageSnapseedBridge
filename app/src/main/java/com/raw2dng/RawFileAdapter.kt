@@ -5,7 +5,9 @@ import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
 import android.util.Size
+import android.view.GestureDetector
 import android.view.LayoutInflater
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.CheckBox
@@ -25,7 +27,7 @@ import kotlinx.coroutines.withContext
  */
 class RawFileAdapter(
     private val onSelectionToggle: (RawFileItem) -> Unit,
-    private val onThumbnailClick: (RawFileItem) -> Unit
+    private val onDoubleTap: (RawFileItem) -> Unit
 ) : ListAdapter<RawFileItem, RawFileAdapter.ViewHolder>(DiffCallback()) {
 
     private val selectedUris = mutableSetOf<Uri>()
@@ -138,17 +140,31 @@ class RawFileAdapter(
                 }
             }
 
-            // Thumbnail click opens preview
-            thumbnail.setOnClickListener {
-                onThumbnailClick(item)
+            // Use GestureDetector for double-tap detection
+            val gestureDetector = GestureDetector(itemView.context, object : GestureDetector.SimpleOnGestureListener() {
+                override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
+                    onSelectionToggle(item)
+                    return true
+                }
+                
+                override fun onDoubleTap(e: MotionEvent): Boolean {
+                    onDoubleTap(item)
+                    return true
+                }
+            })
+            
+            // Apply gesture detector to thumbnail and item
+            thumbnail.setOnTouchListener { _, event ->
+                gestureDetector.onTouchEvent(event)
+                true
+            }
+            
+            itemView.setOnTouchListener { _, event ->
+                gestureDetector.onTouchEvent(event)
+                true
             }
 
-            // Row click toggles selection
-            itemView.setOnClickListener {
-                onSelectionToggle(item)
-            }
-
-            // Checkbox click toggles selection
+            // Checkbox click toggles selection directly (no double-tap needed)
             checkbox.setOnClickListener {
                 onSelectionToggle(item)
             }

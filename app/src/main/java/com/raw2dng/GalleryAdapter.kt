@@ -5,7 +5,9 @@ import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
 import android.util.Size
+import android.view.GestureDetector
 import android.view.LayoutInflater
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.CheckBox
@@ -29,7 +31,8 @@ data class GalleryItem(
 
 class GalleryAdapter(
     private val onItemClick: (GalleryItem) -> Unit,
-    private val onSelectionChanged: (Int) -> Unit
+    private val onSelectionChanged: (Int) -> Unit,
+    private val onDoubleTap: (GalleryItem) -> Unit
 ) : ListAdapter<GalleryItem, GalleryAdapter.ViewHolder>(DiffCallback()) {
 
     private val selectedIds = mutableSetOf<Long>()
@@ -135,18 +138,31 @@ class GalleryAdapter(
                 }
             }
 
-            itemView.setOnClickListener {
-                if (isMultiSelectMode) {
-                    toggleSelection(item)
-                } else {
-                    onItemClick(item)
+            // Use GestureDetector for double-tap detection
+            val gestureDetector = GestureDetector(itemView.context, object : GestureDetector.SimpleOnGestureListener() {
+                override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
+                    if (isMultiSelectMode) {
+                        toggleSelection(item)
+                    } else {
+                        onItemClick(item)
+                    }
+                    return true
                 }
-            }
+                
+                override fun onDoubleTap(e: MotionEvent): Boolean {
+                    onDoubleTap(item)
+                    return true
+                }
+                
+                override fun onLongPress(e: MotionEvent) {
+                    if (!isMultiSelectMode) {
+                        startMultiSelect(item)
+                    }
+                }
+            })
             
-            itemView.setOnLongClickListener {
-                if (!isMultiSelectMode) {
-                    startMultiSelect(item)
-                }
+            itemView.setOnTouchListener { _, event ->
+                gestureDetector.onTouchEvent(event)
                 true
             }
         }

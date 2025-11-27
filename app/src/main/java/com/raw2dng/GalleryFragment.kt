@@ -118,6 +118,9 @@ class GalleryFragment : Fragment() {
             },
             onSelectionChanged = { count ->
                 updateSelectionUI(count)
+            },
+            onDoubleTap = { item ->
+                previewSingleImage(item)
             }
         )
 
@@ -154,6 +157,54 @@ class GalleryFragment : Fragment() {
     }
     
     private var currentPreviewDialog: ImagePreviewDialog? = null
+    
+    private fun previewSingleImage(item: GalleryItem) {
+        val allItems = adapter.getAllItems()
+        if (allItems.isEmpty()) return
+        
+        // Find the position of the double-tapped item
+        val initialPosition = allItems.indexOfFirst { it.uri == item.uri }.coerceAtLeast(0)
+        
+        // Build URIs, filenames, and file types for all items
+        val uris = ArrayList(allItems.map { it.uri })
+        val fileNames = ArrayList(allItems.map { it.name })
+        val selectedItems = adapter.getSelectedItems()
+        val selectedUris = ArrayList(selectedItems.map { it.uri })
+        val fileTypes = ArrayList(allItems.map { galleryItem ->
+            val ext = galleryItem.name.substringAfterLast('.', "").uppercase()
+            when (ext) {
+                "DNG" -> "DNG"
+                "JPG", "JPEG" -> "JPEG"
+                else -> ext
+            }
+        })
+        
+        // Create preview dialog in gallery mode
+        val dialog = ImagePreviewDialog.newInstance(
+            uris = uris,
+            fileNames = fileNames,
+            initialPosition = initialPosition,
+            selectedUris = selectedUris,
+            dngStatus = arrayListOf(),  // Not needed for gallery mode
+            jpegStatus = arrayListOf(),  // Not needed for gallery mode
+            fileTypes = fileTypes,
+            mode = PreviewMode.GALLERY_VIEW
+        )
+        currentPreviewDialog = dialog
+        
+        dialog.show(childFragmentManager, "gallery_preview")
+        
+        // Use fragment lifecycle to detect when dialog is dismissed
+        childFragmentManager.executePendingTransactions()
+        dialog.dialog?.setOnDismissListener {
+            // Sync selection state from dialog back to adapter
+            currentPreviewDialog?.let { previewDialog ->
+                val finalSelection = previewDialog.getSelectedUris()
+                adapter.setSelectionFromUris(finalSelection)
+            }
+            currentPreviewDialog = null
+        }
+    }
     
     private fun previewSelectedImages() {
         val allItems = adapter.getAllItems()

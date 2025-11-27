@@ -1,9 +1,6 @@
 # backlog
 ## high priority
 
-### ui
-double tap on gallery or convert picker should open preview on that image
-
 ### settings window, rendered as a gear on the top right corner of the gallery and convert views
 - all of these settings should be persisted
 *) allow the timeout for autonav to be overridden from 0 seconds (warning text for 0 seconds about failures not preventing navigation) to 30 seconds
@@ -12,7 +9,7 @@ double tap on gallery or convert picker should open preview on that image
 *) allow setting of the convert dialogue text log or thumbnail previews
 *) a button to a dialogue with all license credits
 *) allow filters on convert picker tab to de-emphasize, gray out if you will, images which have already been converted to that format
-*) the jpeg conversion factors such as quality level, in a modal to be reused later. an okk button on the modal will be used 
+*) the jpeg conversion factors such as quality level, in a modal to be reused later. an ok button on the modal will be used 
 
 ### conversion workflow (depends on settings)
 *) from the gallery tab, regenrate should be an option, and prompt the user for settings, defaulting at the app level. do not persist these values

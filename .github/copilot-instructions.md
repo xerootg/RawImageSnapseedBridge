@@ -58,7 +58,8 @@ MainActivity
 ├── RawFilePickerFragment (Tab: Convert)
 │   ├── File selection with thumbnails
 │   ├── Filter chips (All / Not DNG / Not JPEG)
-│   ├── Fullscreen image preview
+│   ├── Single-tap to toggle selection
+│   ├── Double-tap to open fullscreen preview
 │   ├── Conversion controls (DNG/JPEG)
 │   └── Conversion overlay with:
 │       ├── Thumbnail grid / Log toggle
@@ -69,7 +70,9 @@ MainActivity
 └── GalleryFragment (Tab: Gallery)
     ├── Grid view of converted images
     ├── Filter chips (DNG / JPEG / All)
-    ├── Multi-select with long-press
+    ├── Single-tap opens in external app
+    ├── Double-tap opens fullscreen preview
+    ├── Long-press for multi-select mode
     ├── Preview button (multi-select mode)
     ├── Clear folder (filter-specific)
     └── Open in external app
@@ -378,12 +381,15 @@ The app includes hardcoded color matrices for cameras not fully supported by Lib
 22. **Cache cleanup**: Both input and output cache files are deleted after each conversion task completes
 23. **Gallery filter clears selection**: Changing filters calls clearSelectionOnFilterChange() to prevent stale item references
 24. **JPEG quality defaults**: 95 quality, 4:4:4 chroma (no subsampling), Huffman optimization enabled
+25. **Double-tap preview**: Both GalleryAdapter and RawFileAdapter use GestureDetector for double-tap to open preview
 
 ### Testing Checklist
 
 When making changes, verify:
 - [ ] RAW file thumbnails load correctly
 - [ ] Fullscreen preview works
+- [ ] Double-tap in Convert tab opens preview
+- [ ] Double-tap in Gallery tab opens preview
 - [ ] DNG conversion produces valid files
 - [ ] JPEG conversion produces valid files
 - [ ] JPEG quality is high (no visible compression artifacts)
