@@ -35,6 +35,10 @@ output/
 
 dng_sdk.zip
 
+# Release signing keys (auto-generated in CI, never commit!)
+*.keystore
+keystore.properties
+
 # DNG SDK files (must be downloaded separately)
 # app/src/main/cpp/dng_sdk/*.cpp
 # app/src/main/cpp/dng_sdk/*.h

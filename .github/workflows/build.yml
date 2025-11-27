@@ -7,6 +7,10 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: write
+  packages: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -46,18 +50,52 @@ jobs:
       - name: Build Docker image
         run: docker compose build
 
-      - name: Build APK
+      - name: Generate Release Keystore
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          keytool -genkeypair -v \
+            -keystore release.keystore \
+            -alias release \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -storepass ${{ secrets.KEYSTORE_PASSWORD || 'raw2dng-release-key' }} \
+            -keypass ${{ secrets.KEY_PASSWORD || 'raw2dng-release-key' }} \
+            -dname "CN=Raw2DNG, OU=Development, O=Raw2DNG, L=Unknown, ST=Unknown, C=US"
+
+      - name: Create keystore.properties
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          cat > keystore.properties << EOF
+          storePassword=${{ secrets.KEYSTORE_PASSWORD || 'raw2dng-release-key' }}
+          keyPassword=${{ secrets.KEY_PASSWORD || 'raw2dng-release-key' }}
+          keyAlias=release
+          storeFile=../release.keystore
+          EOF
+
+      - name: Build Release APK
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          docker compose run --rm \
+            -e VERSION_NAME=${{ steps.gitversion.outputs.semVer }} \
+            -e VERSION_CODE=${{ steps.gitversion.outputs.commitsSinceVersionSource }} \
+            -e CI=true \
+            android-builder
+
+      - name: Build Debug APK
+        if: github.ref != 'refs/heads/main' || github.event_name != 'push'
         run: |
           docker compose run --rm \
             -e VERSION_NAME=${{ steps.gitversion.outputs.semVer }} \
             -e VERSION_CODE=${{ steps.gitversion.outputs.commitsSinceVersionSource }} \
             android-builder
 
-      - name: Upload Debug APK
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug-${{ steps.gitversion.outputs.semVer }}
-          path: output/app-debug.apk
+          name: raw2dng-${{ steps.gitversion.outputs.semVer }}
+          path: |
+            output/*.apk
           if-no-files-found: error
 
       - name: Create Release
@@ -70,12 +108,15 @@ jobs:
             ## Raw2DNG ${{ steps.gitversion.outputs.semVer }}
             
             ### Installation
-            Download `app-debug.apk` and install on your Android device.
+            Download `app-release.apk` and install on your Android device.
             
             ### Version Info
             - Version: ${{ steps.gitversion.outputs.semVer }}
             - Version Code: ${{ steps.gitversion.outputs.commitsSinceVersionSource }}
             - Commit: ${{ github.sha }}
-          files: output/app-debug.apk
+            
+            ### Note
+            This is a signed release build generated automatically from the main branch.
+          files: output/app-release.apk
           draft: false
           prerelease: false

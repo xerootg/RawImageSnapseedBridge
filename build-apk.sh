@@ -52,78 +52,55 @@ else
     echo -e "${YELLOW}GitVersion not found, using default: $VERSION_NAME${NC}"
 fi
 
-# Check if Adobe DNG SDK is present
-DNG_SDK_DIR="app/src/main/cpp/dng_sdk"
-DNG_SDK_FILES=$(find "$DNG_SDK_DIR" -name "dng_*.cpp" 2>/dev/null | wc -l)
-
-echo "Checking Adobe DNG SDK..."
-
-if [ "$DNG_SDK_FILES" -eq 0 ]; then
-    echo -e "${YELLOW}WARNING: Adobe DNG SDK not found!${NC}"
-    echo "The app will build but only create placeholder DNG files."
-    echo ""
-    echo "To add the Adobe DNG SDK:"
-    echo "  1. Download from: https://helpx.adobe.com/camera-raw/digital-negative.html"
-    echo "  2. Extract the SDK"
-    echo "  3. Copy files: cp /path/to/dng_sdk/source/*.{cpp,h} $DNG_SDK_DIR/"
-    echo "  4. Rebuild the APK"
-    echo ""
-    read -p "Continue without DNG SDK? (y/N) " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        echo "Build cancelled."
-        exit 1
-    fi
-else
-    echo -e "${GREEN}✓ Found $DNG_SDK_FILES DNG SDK source files${NC}"
-fi
-
 echo ""
 echo "Starting build..."
 echo ""
 
-# Clean previous builds (optional, comment out for faster incremental builds)
-#echo "Cleaning previous builds..."
-#./gradlew clean || true
-
-# Build debug APK
-echo ""
-echo "Building debug APK..."
-./gradlew assembleDebug
-
-# Build release APK (unsigned) only if CONFIGURATION=Release
-if [[ "$CONFIGURATION" == "Release" ]]; then
-    echo ""
-    echo "Building release APK..."
-    ./gradlew assembleRelease || echo -e "${YELLOW}Note: Release APK build skipped or failed (signing required)${NC}"
+# Determine build type based on environment
+if [ "$CI" = "true" ] || [ "$BUILD_RELEASE" = "true" ]; then
+    BUILD_TYPE="release"
+    echo "Building RELEASE APK..."
 else
-    echo ""
-    echo -e "${YELLOW}Skipping release build (CONFIGURATION != 'Release').${NC}"
+    BUILD_TYPE="debug"
+    echo "Building DEBUG APK..."
+fi
+
+echo ""
+
+# Build APK
+if [ "$BUILD_TYPE" = "release" ]; then
+    ./gradlew assembleRelease
+else
+    ./gradlew assembleDebug
 fi
 
 # Create output directory
 mkdir -p output
 
-# Copy APKs to output directory
+# Copy APK to output directory
 echo ""
-echo "Copying APKs to output directory..."
+echo "Copying APK to output directory..."
 
-if [ -f "app/build/outputs/apk/debug/app-debug.apk" ]; then
-    cp app/build/outputs/apk/debug/app-debug.apk output/
-    echo -e "${GREEN}✓ Debug APK: output/app-debug.apk${NC}"
-
-    # Get APK info
-    DEBUG_SIZE=$(du -h output/app-debug.apk | cut -f1)
-    echo "  Size: $DEBUG_SIZE"
-fi
-
-if [[ "$CONFIGURATION" == "Release" ]] && [ -f "app/build/outputs/apk/release/app-release-unsigned.apk" ]; then
-    cp app/build/outputs/apk/release/app-release-unsigned.apk output/
-    echo -e "${GREEN}✓ Release APK: output/app-release-unsigned.apk${NC}"
-
-    # Get APK info
-    RELEASE_SIZE=$(du -h output/app-release-unsigned.apk | cut -f1)
-    echo "  Size: $RELEASE_SIZE"
+if [ "$BUILD_TYPE" = "release" ]; then
+    if [ -f "app/build/outputs/apk/release/app-release.apk" ]; then
+        cp app/build/outputs/apk/release/app-release.apk output/
+        echo -e "${GREEN}✓ Release APK: output/app-release.apk${NC}"
+        APK_SIZE=$(du -h output/app-release.apk | cut -f1)
+        echo "  Size: $APK_SIZE"
+    else
+        echo -e "${RED}✗ Release APK not found!${NC}"
+        exit 1
+    fi
+else
+    if [ -f "app/build/outputs/apk/debug/app-debug.apk" ]; then
+        cp app/build/outputs/apk/debug/app-debug.apk output/
+        echo -e "${GREEN}✓ Debug APK: output/app-debug.apk${NC}"
+        APK_SIZE=$(du -h output/app-debug.apk | cut -f1)
+        echo "  Size: $APK_SIZE"
+    else
+        echo -e "${RED}✗ Debug APK not found!${NC}"
+        exit 1
+    fi
 fi
 
 echo ""
