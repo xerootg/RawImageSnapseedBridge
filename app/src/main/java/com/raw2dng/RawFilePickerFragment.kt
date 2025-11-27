@@ -49,6 +49,8 @@ class RawFilePickerFragment : Fragment() {
     private var countdownJob: Job? = null
     private var conversionCompletedSuccessfully = false  // Track if all conversions succeeded
     private var conversionWarningCount = 0  // Track warnings (e.g., couldn't overwrite)
+    private var lastConvertedDngUri: Uri? = null  // Track URI for single DNG conversion (Snapseed)
+    private var conversionFileCount = 0  // Track number of files in current conversion
     private val PREFS_NAME = "raw2dng_prefs"
     private val KEY_AUTO_NAVIGATE = "auto_navigate_gallery"
     private val KEY_SHOW_LOG = "show_conversion_log"
@@ -80,7 +82,7 @@ class RawFilePickerFragment : Fragment() {
 
     // Supported RAW extensions - loaded from settings
     private fun getEnabledRawExtensions(): Set<String> {
-        return SettingsDialog.getEnabledRawTypes(requireContext())
+        return SettingsFragment.getEnabledRawTypes(requireContext())
     }
 
     override fun onCreateView(
@@ -209,9 +211,7 @@ class RawFilePickerFragment : Fragment() {
             updateSelectionUI()
         }
 
-        binding.btnSettings.setOnClickListener {
-            showSettingsDialog()
-        }
+        // Settings button removed - settings is now a tab
 
         binding.btnConvertDng.setOnClickListener {
             val selected = adapter.getSelectedItems()
@@ -388,7 +388,7 @@ class RawFilePickerFragment : Fragment() {
     }
 
     private fun getFilteredFiles(): List<RawFileItem> {
-        val hideConverted = SettingsDialog.getHideConverted(requireContext())
+        val hideConverted = SettingsFragment.getHideConverted(requireContext())
         
         return when (currentFilter) {
             FileFilter.ALL -> {
@@ -530,6 +530,8 @@ class RawFilePickerFragment : Fragment() {
         // Reset the success flag and warning count for new conversion
         conversionCompletedSuccessfully = false
         conversionWarningCount = 0
+        lastConvertedDngUri = null
+        conversionFileCount = selectedFiles.size
         
         // Track the format for navigation after completion
         lastConversionFormat = outputFormat
@@ -662,6 +664,10 @@ class RawFilePickerFragment : Fragment() {
                                 conversionThumbnailAdapter.markSuccess(result.task.inputUri)
                                 Log.d(tag, "✓ ${result.task.fileName}")
                                 appendLog("✓ ${result.task.fileName}")
+                                // Track URI for single DNG conversion (Snapseed feature)
+                                if (result.task.outputFormat == OutputFormat.DNG) {
+                                    lastConvertedDngUri = saveResult.uri
+                                }
                             }
                             is SaveResult.SuccessWithWarning -> {
                                 // Mark success but log warning
@@ -669,6 +675,10 @@ class RawFilePickerFragment : Fragment() {
                                 conversionWarningCount++
                                 Log.w(tag, "⚠ ${result.task.fileName}: ${saveResult.warning}")
                                 appendLog("⚠ ${result.task.fileName}: ${saveResult.warning}")
+                                // Track URI for single DNG conversion (Snapseed feature)
+                                if (result.task.outputFormat == OutputFormat.DNG) {
+                                    lastConvertedDngUri = saveResult.uri
+                                }
                             }
                             is SaveResult.Failed -> {
                                 // Mark error in thumbnail grid
@@ -747,8 +757,24 @@ class RawFilePickerFragment : Fragment() {
                         // Don't count as successful if there were warnings - no auto-navigate
                         conversionCompletedSuccessfully = (failed == 0 && successful > 0 && !hasWarnings)
                         
-                        // Auto-navigate if checkbox is checked AND all conversions succeeded without warnings
-                        if (binding.checkAutoNavigate.isChecked && conversionCompletedSuccessfully) {
+                        // Check if we should open in Snapseed (single DNG conversion)
+                        val openInSnapseedSetting = SettingsFragment.getOpenInSnapseed(requireContext())
+                        val snapseedInstalled = SettingsFragment.isSnapseedInstalled(requireContext())
+                        Log.d(tag, "Snapseed decision: completed=$conversionCompletedSuccessfully, fileCount=$conversionFileCount, format=$lastConversionFormat, dngUri=$lastConvertedDngUri, setting=$openInSnapseedSetting, installed=$snapseedInstalled")
+                        
+                        val shouldOpenSnapseed = conversionCompletedSuccessfully &&
+                            conversionFileCount == 1 &&
+                            lastConversionFormat == OutputFormat.DNG &&
+                            lastConvertedDngUri != null &&
+                            openInSnapseedSetting &&
+                            snapseedInstalled
+                        
+                        if (shouldOpenSnapseed) {
+                            // Open in Snapseed
+                            Log.d(tag, "Opening DNG in Snapseed: $lastConvertedDngUri")
+                            openInSnapseed(lastConvertedDngUri!!)
+                        } else if (binding.checkAutoNavigate.isChecked && conversionCompletedSuccessfully) {
+                            // Auto-navigate if checkbox is checked AND all conversions succeeded without warnings
                             startAutoNavigateCountdown()
                         }
                     }
@@ -835,6 +861,27 @@ class RawFilePickerFragment : Fragment() {
     private fun cancelCountdown() {
         countdownJob?.cancel()
         countdownJob = null
+    }
+    
+    /**
+     * Open a DNG file in Snapseed.
+     */
+    private fun openInSnapseed(uri: Uri) {
+        try {
+            Log.d(tag, "Opening in Snapseed: uri=$uri")
+            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "image/x-adobe-dng")
+                setPackage(SettingsFragment.SNAPSEED_PACKAGE)
+                addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            startActivity(intent)
+            showPickerContent()
+        } catch (e: Exception) {
+            Log.e(tag, "Failed to open Snapseed", e)
+            // Fall back to gallery navigation
+            (activity as? MainActivity)?.navigateToGallery(lastConversionFormat)
+            showPickerContent()
+        }
     }
 
     /**
@@ -1022,16 +1069,7 @@ class RawFilePickerFragment : Fragment() {
         return null
     }
 
-    private fun showSettingsDialog() {
-        val dialog = SettingsDialog.newInstance()
-        dialog.setOnSettingsSavedListener(object : SettingsDialog.OnSettingsSavedListener {
-            override fun onSettingsSaved() {
-                // Reload the file list with the new RAW type settings
-                loadRawFiles()
-            }
-        })
-        dialog.show(childFragmentManager, SettingsDialog.TAG)
-    }
+    // Settings dialog removed - settings is now a dedicated tab
 
     override fun onDestroyView() {
         super.onDestroyView()

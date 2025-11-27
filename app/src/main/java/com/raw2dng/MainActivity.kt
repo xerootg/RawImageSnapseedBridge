@@ -21,6 +21,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainTabsBinding
     private var galleryFragment: GalleryFragment? = null
     private var pickerFragment: RawFilePickerFragment? = null
+    private var settingsFragment: SettingsFragment? = null
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -101,6 +102,7 @@ class MainActivity : AppCompatActivity() {
             tab.text = when (position) {
                 0 -> getString(R.string.tab_convert)
                 1 -> getString(R.string.tab_gallery)
+                2 -> getString(R.string.tab_settings)
                 else -> ""
             }
         }.attach()
@@ -134,7 +136,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private inner class TabAdapter(activity: AppCompatActivity) : FragmentStateAdapter(activity) {
-        override fun getItemCount(): Int = 2
+        override fun getItemCount(): Int = 3
 
         override fun createFragment(position: Int): Fragment {
             return when (position) {
@@ -145,6 +147,10 @@ class MainActivity : AppCompatActivity() {
                 1 -> {
                     galleryFragment = GalleryFragment()
                     galleryFragment!!
+                }
+                2 -> {
+                    settingsFragment = SettingsFragment.newInstance()
+                    settingsFragment!!
                 }
                 else -> RawFilePickerFragment.newInstance()
             }

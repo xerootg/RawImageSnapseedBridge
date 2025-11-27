@@ -1,37 +1,25 @@
 package com.raw2dng
 
-import android.app.Dialog
 import android.content.Context
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
+import android.view.ViewGroup
 import android.widget.Button
+import android.widget.CheckBox
 import android.widget.SeekBar
 import android.widget.TextView
 import androidx.core.content.ContextCompat
-import androidx.fragment.app.DialogFragment
+import androidx.fragment.app.Fragment
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 
 /**
- * Settings dialog for app configuration.
+ * Settings fragment for app configuration.
+ * This is a full-screen fragment that appears as a tab in the main activity.
  */
-class SettingsDialog : DialogFragment() {
-
-    /**
-     * Callback interface for when settings are saved.
-     */
-    interface OnSettingsSavedListener {
-        fun onSettingsSaved()
-    }
-    
-    private var onSettingsSavedListener: OnSettingsSavedListener? = null
-    
-    fun setOnSettingsSavedListener(listener: OnSettingsSavedListener) {
-        onSettingsSavedListener = listener
-    }
+class SettingsFragment : Fragment() {
 
     companion object {
-        const val TAG = "SettingsDialog"
         const val PREFS_NAME = "raw2dng_prefs"
         const val KEY_AUTONAV_TIMEOUT = "autonav_timeout_seconds"
         const val KEY_ENABLED_RAW_TYPES = "enabled_raw_types"
@@ -41,13 +29,14 @@ class SettingsDialog : DialogFragment() {
         const val SNAPSEED_PACKAGE = "com.niksoftware.snapseed"
         
         // All supported RAW extensions (sorted alphabetically for display)
+        // Note: DNG is NOT included - it's an output format, not an input format
         val ALL_RAW_EXTENSIONS = arrayOf(
             "3fr", "arw", "cr2", "cr3", "dcr", "erf", "iiq", "k25", "kdc",
             "mef", "mos", "nef", "nrw", "orf", "pef", "raf", "rw2", "sr2", "srf"
         )
         
-        fun newInstance(): SettingsDialog {
-            return SettingsDialog()
+        fun newInstance(): SettingsFragment {
+            return SettingsFragment()
         }
         
         /**
@@ -89,21 +78,45 @@ class SettingsDialog : DialogFragment() {
                 false
             }
         }
+        
+        /**
+         * Get the auto-navigate timeout in seconds.
+         */
+        fun getAutoNavTimeout(context: Context): Int {
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            return prefs.getInt(KEY_AUTONAV_TIMEOUT, DEFAULT_TIMEOUT)
+        }
     }
     
-    // Track current selection state
+    // Track current selection state for RAW types
     private lateinit var selectedTypes: BooleanArray
     private lateinit var btnSelectRawTypes: Button
+    
+    // UI elements that need to be accessed for saving
+    private lateinit var seekAutonavTimeout: SeekBar
+    private lateinit var chkHideConverted: CheckBox
+    private lateinit var chkOpenInSnapseed: CheckBox
 
-    override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
-        val view = LayoutInflater.from(requireContext())
-            .inflate(R.layout.dialog_settings, null)
+    override fun onCreateView(
+        inflater: LayoutInflater,
+        container: ViewGroup?,
+        savedInstanceState: Bundle?
+    ): View? {
+        return inflater.inflate(R.layout.fragment_settings, container, false)
+    }
+
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
         
-        val btnSave = view.findViewById<Button>(R.id.btnSave)
-        val seekAutonavTimeout = view.findViewById<SeekBar>(R.id.seekAutonavTimeout)
+        seekAutonavTimeout = view.findViewById(R.id.seekAutonavTimeout)
         val txtAutonavValue = view.findViewById<TextView>(R.id.txtAutonavValue)
         val txtAutonavWarning = view.findViewById<TextView>(R.id.txtAutonavWarning)
         btnSelectRawTypes = view.findViewById(R.id.btnSelectRawTypes)
+        chkHideConverted = view.findViewById(R.id.chkHideConverted)
+        chkOpenInSnapseed = view.findViewById(R.id.chkOpenInSnapseed)
+        val txtSnapseedHint = view.findViewById<TextView>(R.id.txtSnapseedHint)
+        val btnJpegSettings = view.findViewById<Button>(R.id.btnJpegSettings)
+        val btnLicenses = view.findViewById<Button>(R.id.btnLicenses)
         
         // Load current values from preferences
         val prefs = requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -122,6 +135,8 @@ class SettingsDialog : DialogFragment() {
         seekAutonavTimeout.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 updateTimeoutDisplay(txtAutonavValue, txtAutonavWarning, progress)
+                // Auto-save when changed
+                saveSettings()
             }
             
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
@@ -135,70 +150,69 @@ class SettingsDialog : DialogFragment() {
         }
         
         // Setup hide converted checkbox
-        val chkHideConverted = view.findViewById<android.widget.CheckBox>(R.id.chkHideConverted)
         chkHideConverted.isChecked = getHideConverted(requireContext())
+        chkHideConverted.setOnCheckedChangeListener { _, _ ->
+            saveSettings()
+            notifySettingsChanged()
+        }
         
         // Setup Snapseed checkbox
-        val chkOpenInSnapseed = view.findViewById<android.widget.CheckBox>(R.id.chkOpenInSnapseed)
-        val txtSnapseedHint = view.findViewById<TextView>(R.id.txtSnapseedHint)
         val snapseedInstalled = isSnapseedInstalled(requireContext())
         val currentSnapseedPref = getOpenInSnapseed(requireContext())
-        android.util.Log.d("SettingsDialog", "Opening settings: snapseedInstalled=$snapseedInstalled, currentPref=$currentSnapseedPref")
+        android.util.Log.d("SettingsFragment", "Loading settings: snapseedInstalled=$snapseedInstalled, currentPref=$currentSnapseedPref")
         chkOpenInSnapseed.isChecked = currentSnapseedPref && snapseedInstalled
         chkOpenInSnapseed.isEnabled = snapseedInstalled
         if (!snapseedInstalled) {
             txtSnapseedHint.setText(R.string.snapseed_not_installed)
             txtSnapseedHint.setTextColor(ContextCompat.getColor(requireContext(), android.R.color.holo_orange_dark))
         }
+        chkOpenInSnapseed.setOnCheckedChangeListener { _, isChecked ->
+            android.util.Log.d("SettingsFragment", "Snapseed checkbox changed to: $isChecked")
+            saveSettings()
+        }
         
         // Setup JPEG settings button
-        val btnJpegSettings = view.findViewById<Button>(R.id.btnJpegSettings)
         btnJpegSettings.setOnClickListener {
             JpegSettingsDialog.newInstance().show(childFragmentManager, JpegSettingsDialog.TAG)
         }
         
         // Setup licenses button
-        val btnLicenses = view.findViewById<Button>(R.id.btnLicenses)
         btnLicenses.setOnClickListener {
             LicensesDialog.newInstance().show(childFragmentManager, LicensesDialog.TAG)
         }
+    }
+    
+    private fun saveSettings() {
+        if (!isAdded) return
         
-        val dialog = MaterialAlertDialogBuilder(requireContext())
-            .setView(view)
-            .create()
+        val prefs = requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val editor = prefs.edit()
         
-        btnSave.setOnClickListener {
-            // Save all settings
-            val editor = prefs.edit()
-            editor.putInt(KEY_AUTONAV_TIMEOUT, seekAutonavTimeout.progress)
-            
-            // Save enabled RAW types
-            val enabledSet = mutableSetOf<String>()
-            for (i in ALL_RAW_EXTENSIONS.indices) {
-                if (selectedTypes[i]) {
-                    enabledSet.add(ALL_RAW_EXTENSIONS[i])
-                }
+        editor.putInt(KEY_AUTONAV_TIMEOUT, seekAutonavTimeout.progress)
+        
+        // Save enabled RAW types
+        val enabledSet = mutableSetOf<String>()
+        for (i in ALL_RAW_EXTENSIONS.indices) {
+            if (selectedTypes[i]) {
+                enabledSet.add(ALL_RAW_EXTENSIONS[i])
             }
-            editor.putStringSet(KEY_ENABLED_RAW_TYPES, enabledSet)
-            
-            // Save hide converted setting
-            editor.putBoolean(KEY_HIDE_CONVERTED, chkHideConverted.isChecked)
-            
-            // Save Snapseed setting
-            android.util.Log.d("SettingsDialog", "Saving Snapseed setting: ${chkOpenInSnapseed.isChecked}")
-            editor.putBoolean(KEY_OPEN_IN_SNAPSEED, chkOpenInSnapseed.isChecked)
-            
-            editor.apply()
-            
-            // Verify the save worked
-            val verifyPrefs = requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            android.util.Log.d("SettingsDialog", "Verified Snapseed setting after save: ${verifyPrefs.getBoolean(KEY_OPEN_IN_SNAPSEED, false)}")
-            
-            onSettingsSavedListener?.onSettingsSaved()
-            dismiss()
         }
+        editor.putStringSet(KEY_ENABLED_RAW_TYPES, enabledSet)
         
-        return dialog
+        // Save hide converted setting
+        editor.putBoolean(KEY_HIDE_CONVERTED, chkHideConverted.isChecked)
+        
+        // Save Snapseed setting
+        editor.putBoolean(KEY_OPEN_IN_SNAPSEED, chkOpenInSnapseed.isChecked)
+        
+        editor.apply()
+        
+        android.util.Log.d("SettingsFragment", "Settings saved - Snapseed: ${chkOpenInSnapseed.isChecked}")
+    }
+    
+    private fun notifySettingsChanged() {
+        // Notify MainActivity to refresh the convert tab when relevant settings change
+        (activity as? MainActivity)?.refreshConvertTab()
     }
     
     private fun updateTimeoutDisplay(valueText: TextView, warningText: TextView, seconds: Int) {
@@ -223,6 +237,8 @@ class SettingsDialog : DialogFragment() {
             }
             .setPositiveButton(R.string.done) { _, _ ->
                 updateRawTypesButtonText()
+                saveSettings()
+                notifySettingsChanged()
             }
             .setNeutralButton(R.string.select_all) { dialog, _ ->
                 // Select all
@@ -230,6 +246,8 @@ class SettingsDialog : DialogFragment() {
                     selectedTypes[i] = true
                 }
                 updateRawTypesButtonText()
+                saveSettings()
+                notifySettingsChanged()
                 dialog.dismiss()
             }
             .setNegativeButton(R.string.clear_all) { dialog, _ ->
@@ -242,6 +260,8 @@ class SettingsDialog : DialogFragment() {
                     selectedTypes[0] = true
                 }
                 updateRawTypesButtonText()
+                saveSettings()
+                notifySettingsChanged()
                 dialog.dismiss()
             }
             .show()

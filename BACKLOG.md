@@ -6,8 +6,7 @@
 *) conversion list should be filterable by exif data like camera, lens, etc
 
 ### quick actions
-*) add a setting which allows single conversions to dng to auto open in snapseeed instead of navigating to gallery
-*) add a setting which allows single conversions to jpeg to auto prompt how to share instead of navigating to gallery
+*) add a persisted setting which allows single conversions to jpeg to auto prompt to share instead of navigating to gallery
 
 ## low priority
 *) convert view does not navigate to jpeg after converting to jpeg

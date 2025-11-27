@@ -5,6 +5,9 @@ Update this file to reflect any architectural or workflow changes made in the co
 
 Ensure all licenses are properly attributed and included in the documentation as well as the Licenses dialog in the app.
 
+## Tools
+1. **Mandatory** Using Sequential Thinking MCP if it is installed and available in your environment.
+
 ## Project Overview
 
 Raw2DNG is an Android application that converts RAW camera files (CR2, ARW, NEF, ORF, RAF, RW2, DNG, PEF, SRW, etc.) to Adobe DNG format and/or JPEG. It uses LibRaw for RAW file processing and the Adobe DNG SDK for DNG file creation.
@@ -80,16 +83,24 @@ MainActivity
 │       ├── Progress bar
 │       └── Done button with countdown
 │
-└── GalleryFragment (Tab: Gallery)
-    ├── Grid view of converted images
-    ├── Filter chips (DNG / JPEG / All)
-    ├── Single-tap opens in external app
-    ├── Double-tap opens fullscreen preview
-    ├── Long-press for multi-select mode
-    ├── Preview button (multi-select mode)
-    ├── Regenerate button (multi-select mode)
-    ├── Clear folder (filter-specific)
-    └── Open in external app
+├── GalleryFragment (Tab: Gallery)
+│   ├── Grid view of converted images
+│   ├── Filter chips (DNG / JPEG / All)
+│   ├── Single-tap opens in external app
+│   ├── Double-tap opens fullscreen preview
+│   ├── Long-press for multi-select mode
+│   ├── Preview button (multi-select mode)
+│   ├── Regenerate button (multi-select mode)
+│   ├── Clear folder (filter-specific)
+│   └── Open in external app
+│
+└── SettingsFragment (Tab: Settings)
+    ├── Auto-navigate timeout slider (0-30s)
+    ├── RAW file types selection
+    ├── Hide/dim converted images checkbox
+    ├── Open single DNG in Snapseed checkbox
+    ├── JPEG quality settings button
+    └── Open source licenses button
 
 ImagePreviewDialog (shared)
 ├── ViewPager2 for image swiping
@@ -132,7 +143,7 @@ com.raw2dng/
 ├── DNGConverter.kt           # JNI bridge to native code
 ├── ImagePreviewDialog.kt     # Fullscreen preview dialog with selection
 ├── ImagePagerAdapter.kt      # ViewPager2 adapter for preview images
-├── SettingsDialog.kt         # Main settings dialog with all app preferences
+├── SettingsFragment.kt       # Settings tab with all app preferences (auto-save)
 ├── JpegSettingsDialog.kt     # JPEG conversion settings (quality, chroma, optimize)
 ├── LicensesDialog.kt         # Open source licenses display
 ├── RegenerateDialog.kt       # Regeneration settings dialog (one-time settings)
@@ -435,28 +446,34 @@ The app includes hardcoded color matrices for cameras not fully supported by Lib
 - Olympus OM-1 (ORF files)
 - More can be added in `libraw_to_dng.cpp`
 
-### Settings Dialog
+### Settings Fragment
 
-The app includes a settings dialog accessible via gear icon in both fragments:
+Settings is a dedicated tab in the app (not a modal dialog). Settings auto-save when changed:
 
 ```
-SettingsDialog.kt
+SettingsFragment.kt (Tab: Settings)
 ├── Auto-Navigate Timeout (0-30 seconds)
 │   ├── SeekBar with value display
 │   ├── 0 seconds shows warning (orange text)
-│   └── Persisted via KEY_AUTONAV_TIMEOUT
+│   └── Auto-saved via KEY_AUTONAV_TIMEOUT
 │
 ├── Enabled RAW File Types
-│   ├── Multi-chip selection (FlexboxLayout)
+│   ├── Multi-choice dialog selection
 │   ├── 20 formats: cr2, cr3, nef, nrw, arw, srf, sr2, orf, pef,
 │   │   rw2, 3fr, iiq, dcr, k25, kdc, erf, mef, mos, raf, dng
 │   ├── Warning if none selected
-│   └── Persisted via KEY_ENABLED_RAW_TYPES (StringSet)
+│   └── Auto-saved via KEY_ENABLED_RAW_TYPES (StringSet)
 │
 ├── Hide Already Converted Images (checkbox)
 │   ├── When checked: filter hides converted files completely
 │   ├── When unchecked: converted files shown grayed out (35% opacity)
-│   └── Persisted via KEY_HIDE_CONVERTED (Boolean, default: true)
+│   └── Auto-saved via KEY_HIDE_CONVERTED (Boolean, default: true)
+│
+├── Open Single DNG in Snapseed (checkbox)
+│   ├── When checked: single DNG conversions auto-open in Snapseed instead of Gallery
+│   ├── Disabled if Snapseed not installed (shows warning)
+│   ├── Only triggers for single-file DNG conversions that complete successfully
+│   └── Auto-saved via KEY_OPEN_IN_SNAPSEED (Boolean, default: false)
 │
 ├── JPEG Quality Settings (button → JpegSettingsDialog)
 │   ├── Quality: SeekBar 1-100 (default: 95)
@@ -479,11 +496,15 @@ SharedPreferences Keys:
   KEY_AUTONAV_TIMEOUT = "autonav_timeout_seconds" (Int, default: 3)
   KEY_ENABLED_RAW_TYPES = "enabled_raw_types" (StringSet, default: all)
   KEY_HIDE_CONVERTED = "hide_converted_images" (Boolean, default: true)
+  KEY_OPEN_IN_SNAPSEED = "open_single_dng_in_snapseed" (Boolean, default: false)
   KEY_JPEG_QUALITY = "jpeg_quality" (Int, default: 95)
   KEY_JPEG_CHROMA = "jpeg_chroma_subsampling" (Int, default: 0 = 4:4:4)
   KEY_JPEG_OPTIMIZE = "jpeg_optimize_coding" (Boolean, default: true)
   KEY_AUTO_NAVIGATE = "auto_navigate" (Boolean)
   KEY_SHOW_LOG = "show_log" (Boolean)
+  
+Constants:
+  SNAPSEED_PACKAGE = "com.niksoftware.snapseed"
 ```
 
 ### Important Implementation Details
@@ -492,37 +513,38 @@ SharedPreferences Keys:
 2. **ConvertedFilesHelper** checks file existence on-demand (no caching)
 3. **GalleryAdapter** supports both click (open) and long-press (multi-select)
 4. **Android 11+ (R)** uses `MediaStore.createDeleteRequest()` for file deletion (skips app confirmation, uses system dialog)
-5. **JPEG output** uses LibRaw's dcraw processing with libjpeg encoding at quality 95, 4:4:4 subsampling
-6. **MainActivity** holds references to both pickerFragment and galleryFragment for cross-tab communication
-7. **ThumbnailStripItem** carries conversion status (dng/jpeg booleans) for badge display
-8. **500ms delay** after deletion before refreshing Convert tab (ensures filesystem sync)
-9. **ViewPager2.OnPageChangeCallback** clears conversion overlay when switching tabs (if done)
-10. **SharedPreferences** persists: auto-navigate checkbox, log/thumbnail toggle preference, timeout, RAW types
-11. **conversionCompletedSuccessfully** flag enables checkbox to trigger countdown after completion
-12. **configChanges** in manifest preserves state on screen rotation (no activity recreation)
-13. **Button styling**: All buttons use Material filled style for consistency
-14. **ConversionQueue.addTaskDynamic()**: Adds task to channel, workers pick it up immediately
-15. **ConversionQueue.DEFAULT_PARALLELISM**: Set to 2, configurable via constructor parameter
-16. **Thread-safe counters**: Uses AtomicInteger for startedCount, completedCount, successfulCount, failedCount
-17. **Overwrite detection**: Based on RawFileItem.isConvertedToDng/Jpeg matching OutputFormat
-18. **localtime_r()**: Thread-safe timestamp conversion in C++ (required for parallel JNI calls)
-19. **LibRaw thread-safety**: CMakeLists.txt does NOT define LIBRAW_NOTHREADS, enabling LibRaw's thread-local storage (TLS)
-20. **Unique cache file IDs**: UUID-based filenames prevent parallel file access conflicts (e.g., DSC_0001_a1b2c3d4.NEF)
-21. **Original filename for public storage**: saveToPublicStorage() uses original filename, not UUID-based cache filename
-22. **Cache cleanup**: Both input and output cache files are deleted after each conversion task completes
-23. **Gallery filter clears selection**: Changing filters calls clearSelectionOnFilterChange() to prevent stale item references
-24. **JPEG quality defaults**: 95 quality, 4:4:4 chroma (no subsampling), Huffman optimization enabled
-25. **Double-tap preview**: Both GalleryAdapter and RawFileAdapter use GestureDetector for double-tap to open preview
-26. **Settings gear icon**: Both fragments have headerRow with settings button that opens SettingsDialog
-27. **RAW type filtering**: RawFilePickerFragment.getEnabledRawExtensions() reads from SharedPreferences
-28. **FlexboxLayout**: Google library for responsive chip layout in settings dialog
-29. **ExifData**: Hybrid helper class - LibRaw JNI for RAW/DNG files, ExifInterface for JPEG
-30. **EXIF categories**: Camera, Lens, Exposure, Shooting, Dimensions, GPS, Date - displayed in scrollable overlay
-31. **extractMetadataJson()**: JNI method in libraw_reader.cpp returns JSON with complete metadata
-32. **EXIF transfer to DNG**: Complete EXIF written via DNG SDK including GPS, exposure program, metering mode
-33. **EXIF transfer to JPEG**: After JPEG conversion, ExifData.writeExifToJpeg() copies EXIF from source RAW
-34. **Overwrite on conversion**: saveToMediaStore() tries to delete existing file via findExistingFile(), then overwrites in place if delete fails. Only works for files created by current app installation (Android Scoped Storage limitation). Files from previous installations must be deleted from Gallery first.
-35. **Conversion warnings**: SaveResult sealed class tracks success/warning/failure. Warnings (e.g., couldn't overwrite) are logged, progress bar turns orange, auto-navigate is cancelled, and status shows "Completed with X warning(s). See log for details."
+5. **Android 11+ package visibility**: AndroidManifest.xml must declare `<queries><package android:name="com.niksoftware.snapseed" /></queries>` to query if Snapseed is installed. Without this, `getPackageInfo()` throws `NameNotFoundException` even when the app is installed.
+6. **JPEG output** uses LibRaw's dcraw processing with libjpeg encoding at quality 95, 4:4:4 subsampling
+7. **MainActivity** holds references to both pickerFragment and galleryFragment for cross-tab communication
+8. **ThumbnailStripItem** carries conversion status (dng/jpeg booleans) for badge display
+9. **500ms delay** after deletion before refreshing Convert tab (ensures filesystem sync)
+10. **ViewPager2.OnPageChangeCallback** clears conversion overlay when switching tabs (if done)
+11. **SharedPreferences** persists: auto-navigate checkbox, log/thumbnail toggle preference, timeout, RAW types
+12. **conversionCompletedSuccessfully** flag enables checkbox to trigger countdown after completion
+13. **configChanges** in manifest preserves state on screen rotation (no activity recreation)
+14. **Button styling**: All buttons use Material filled style for consistency
+15. **ConversionQueue.addTaskDynamic()**: Adds task to channel, workers pick it up immediately
+16. **ConversionQueue.DEFAULT_PARALLELISM**: Set to 2, configurable via constructor parameter
+17. **Thread-safe counters**: Uses AtomicInteger for startedCount, completedCount, successfulCount, failedCount
+18. **Overwrite detection**: Based on RawFileItem.isConvertedToDng/Jpeg matching OutputFormat
+19. **localtime_r()**: Thread-safe timestamp conversion in C++ (required for parallel JNI calls)
+20. **LibRaw thread-safety**: CMakeLists.txt does NOT define LIBRAW_NOTHREADS, enabling LibRaw's thread-local storage (TLS)
+21. **Unique cache file IDs**: UUID-based filenames prevent parallel file access conflicts (e.g., DSC_0001_a1b2c3d4.NEF)
+22. **Original filename for public storage**: saveToPublicStorage() uses original filename, not UUID-based cache filename
+23. **Cache cleanup**: Both input and output cache files are deleted after each conversion task completes
+24. **Gallery filter clears selection**: Changing filters calls clearSelectionOnFilterChange() to prevent stale item references
+25. **JPEG quality defaults**: 95 quality, 4:4:4 chroma (no subsampling), Huffman optimization enabled
+26. **Double-tap preview**: Both GalleryAdapter and RawFileAdapter use GestureDetector for double-tap to open preview
+27. **Settings gear icon**: Both fragments have headerRow with settings button that opens SettingsDialog
+28. **RAW type filtering**: RawFilePickerFragment.getEnabledRawExtensions() reads from SharedPreferences
+29. **FlexboxLayout**: Google library for responsive chip layout in settings dialog
+30. **ExifData**: Hybrid helper class - LibRaw JNI for RAW/DNG files, ExifInterface for JPEG
+31. **EXIF categories**: Camera, Lens, Exposure, Shooting, Dimensions, GPS, Date - displayed in scrollable overlay
+32. **extractMetadataJson()**: JNI method in libraw_reader.cpp returns JSON with complete metadata
+33. **EXIF transfer to DNG**: Complete EXIF written via DNG SDK including GPS, exposure program, metering mode
+34. **EXIF transfer to JPEG**: After JPEG conversion, ExifData.writeExifToJpeg() copies EXIF from source RAW
+35. **Overwrite on conversion**: saveToMediaStore() tries to delete existing file via findExistingFile(), then overwrites in place if delete fails. Only works for files created by current app installation (Android Scoped Storage limitation). Files from previous installations must be deleted from Gallery first.
+36. **Conversion warnings**: SaveResult sealed class tracks success/warning/failure. Warnings (e.g., couldn't overwrite) are logged, progress bar turns orange, auto-navigate is cancelled, and status shows "Completed with X warning(s). See log for details."
 
 ### EXIF Data Transfer
 
@@ -673,6 +695,11 @@ When making changes, verify:
 - [ ] JPEG conversion uses saved settings
 - [ ] Licenses dialog opens and displays all licenses
 - [ ] Licenses dialog is scrollable
+- [ ] Snapseed setting checkbox disabled if Snapseed not installed
+- [ ] Snapseed setting persists across app restarts
+- [ ] Single DNG conversion opens Snapseed when enabled and Snapseed installed
+- [ ] Multi-file DNG conversion does NOT open Snapseed (navigates to Gallery instead)
+- [ ] JPEG conversion does NOT trigger Snapseed opening
 - [ ] Regenerate button appears in Gallery multi-select mode
 - [ ] Regenerate dialog shows format selection and JPEG settings
 - [ ] JPEG settings panel shows/hides based on format selection

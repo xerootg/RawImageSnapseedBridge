@@ -26,6 +26,7 @@
     <string name="folder_empty_jpeg">No JPEG files to clear</string>
     <string name="tab_convert">Convert</string>
     <string name="tab_gallery">Gallery</string>
+    <string name="tab_settings">Settings</string>
     <string name="gallery_empty">No converted images yet</string>
     <string name="gallery_file_count">%1$d images in Raw2DNG</string>
     <string name="open_with">Open with…</string>
@@ -103,6 +104,9 @@
     <string name="clear_all">Clear All</string>
     <string name="hide_converted_label">Hide already converted images</string>
     <string name="hide_converted_hint">When unchecked, converted images appear grayed out instead of hidden</string>
+    <string name="snapseed_label">Open single DNG in Snapseed on completion</string>
+    <string name="snapseed_hint">Instead of navigating to Gallery, open the converted file in Snapseed</string>
+    <string name="snapseed_not_installed">Snapseed is not installed</string>
     
     <!-- JPEG Settings -->
     <string name="jpeg_settings_label">JPEG conversion defaults</string>

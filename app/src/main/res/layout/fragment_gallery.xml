@@ -53,16 +53,6 @@
 
         </LinearLayout>
 
-        <ImageButton
-            android:id="@+id/btnSettings"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="@string/open_settings"
-            android:src="@android:drawable/ic_menu_preferences"
-            android:scaleType="centerInside"
-            android:padding="8dp" />
-
     </LinearLayout>
 
     <Button

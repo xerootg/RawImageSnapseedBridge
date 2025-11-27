@@ -151,9 +151,7 @@ class GalleryFragment : Fragment() {
             showRegenerateDialog()
         }
         
-        binding.btnSettings.setOnClickListener {
-            showSettingsDialog()
-        }
+        // Settings button removed - settings is now a tab
         
         // Setup filter chips
         setupFilterChips()
@@ -965,7 +963,7 @@ class GalleryFragment : Fragment() {
     
     private suspend fun findOriginalRaw(baseName: String): Uri? = withContext(Dispatchers.IO) {
         val contentResolver = requireContext().contentResolver
-        val rawExtensions = SettingsDialog.getEnabledRawTypes(requireContext())
+        val rawExtensions = SettingsFragment.getEnabledRawTypes(requireContext())
         
         val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
@@ -1098,9 +1096,7 @@ class GalleryFragment : Fragment() {
         return null
     }
 
-    private fun showSettingsDialog() {
-        SettingsDialog.newInstance().show(childFragmentManager, SettingsDialog.TAG)
-    }
+    // Settings dialog removed - settings is now a dedicated tab
 
     override fun onResume() {
         super.onResume()

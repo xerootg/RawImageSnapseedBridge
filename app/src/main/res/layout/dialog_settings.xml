@@ -1,17 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    android:orientation="vertical"
-    android:padding="24dp">
+    android:layout_height="wrap_content">
 
-    <TextView
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="@string/settings"
-        android:textSize="20sp"
-        android:textStyle="bold"
-        android:layout_marginBottom="16dp" />
+        android:orientation="vertical"
+        android:padding="24dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/settings"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="16dp" />
 
     <!-- Auto-navigate timeout setting -->
     <TextView
@@ -101,6 +105,25 @@
         android:layout_marginStart="32dp"
         android:layout_marginTop="4dp" />
 
+    <!-- Open single DNG in Snapseed setting -->
+    <CheckBox
+        android:id="@+id/chkOpenInSnapseed"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/snapseed_label"
+        android:checked="false"
+        android:layout_marginTop="12dp" />
+
+    <TextView
+        android:id="@+id/txtSnapseedHint"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/snapseed_hint"
+        android:textSize="12sp"
+        android:textColor="@android:color/darker_gray"
+        android:layout_marginStart="32dp"
+        android:layout_marginTop="4dp" />
+
     <!-- JPEG quality settings -->
     <View
         android:layout_width="match_parent"
@@ -145,4 +168,6 @@
         android:text="@string/save"
         android:layout_marginTop="16dp" />
 
-</LinearLayout>
+    </LinearLayout>
+
+</ScrollView>
