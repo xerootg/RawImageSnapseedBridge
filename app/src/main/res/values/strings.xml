@@ -63,6 +63,8 @@
     <string name="converting_files">Converting Files…</string>
     <string name="conversion_complete">%1$d done, %2$d failed</string>
     <string name="done">Done</string>
+    <string name="done_countdown">Done (%1$d)</string>
+    <string name="auto_navigate_gallery">Automatically go to Gallery on completion</string>
     <string name="view_gallery">View Gallery</string>
     
     <!-- Gallery filter -->

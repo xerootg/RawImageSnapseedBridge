@@ -2,18 +2,27 @@
 ## high priority
 
 ### ux
-*) the conversion page should autonavigate after 5 seconds if the automatically go to gallery on completion checkbox is checked. this value should be persisted.
-*) the style of the buttons at the bottom of convert do not match
-*) in the conversion preview, the gutter of images should be rendered, showing selected images with a green checkmark
+*) if in the conversion dialogue, we are done, but the done button is not clicked and gallery is, the convert tab returns to the convertsion dialogue. it should not, this navigation should clear the dialogue as if the user had pressed done.
+*) in conversion, a button next to Converting Files... should toggle between the thumbnails and the log messages, leaving the checkbox, overall progress bar, and done button in place. this setting should be persisted
+*) if the mediaapi is used to delete pictures, regardless of filter type, mediaapi asks permission to delete the files. do not additionally ask for permission as jpeg does now.
 *) screen rotation cancels whatever is running if converting, even if conversion is complete
 *) in multi-select mode in gallery, previewing the selected image(s) should be possible with a button in the top bar, and in preview there should be a button a the top allowing openwith, as well as selection and de-selection of images. gutter of images should be rendered, showing selected images with a green checkmark
+*) material you should reflect the system theme. it is currently purple and my system theme is not purple.
 
 ### conversion workflow
 *) conversion should be parallelized, after ensuring the underlying JNI is thread-safe. if it is not threadsafe, do not parallelize.
-*) if an image has previously been converted, add a badge to the conversion thumbnail that says "tap to overwrite" and make sure the existing code overwrites the previous conversion. require the user to touch each overwrite image before converting it, and if it is not touched, and all other images have been rendered, done should be available. conversion should run for all images not needing overwrite confirmation, and confirmed overwrites should be dynamically added to the list of images to convert at the end of the conversion queue.
+*) if an image has previously been converted, add a badge to the conversion thumbnail that says "tap to overwrite" and make sure the existing code overwrites the previous conversion. require the user to touch each overwrite image before converting it, and if it is not touched, and all other images have been rendered, done should be available. conversion should run for all images not needing overwrite confirmation, and confirmed overwrites should be dynamically added to the list of images to convert at the end of the conversion queue. The autonavigate checkbox feature should not autonavigate if not all images have been confirmed, even if all other images converted sucessfully
 
 ### raw handling
 *) rotation of the input should be transfered to the dng, even if that means rotating the image in memory before writing the dng
+
+### settings window, rendered as a gear on the top right corner of the gallery and convert views
+- all settings should be persisted
+*) allow the autonavigate feature to be set
+*) allow the timeout for autonav to be overridden from 0 seconds (warning text in red for 0 seconds) to 30 seconds
+*) allow the list of known raw types to be any-combo of picked from
+*) allow the directories to search for raws in to be overridden (requires a picker)
+*) allow setting of the convert dialogue text log or thumbnail previews
 
 ### exif
 *) preview view should have a button to show exif data

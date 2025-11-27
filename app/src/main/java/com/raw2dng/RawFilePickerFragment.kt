@@ -2,6 +2,7 @@ package com.raw2dng
 
 import android.Manifest
 import android.content.ContentValues
+import android.content.Context
 import android.content.pm.PackageManager
 import android.database.Cursor
 import android.media.MediaScannerConnection
@@ -21,6 +22,8 @@ import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.raw2dng.databinding.FragmentRawPickerBinding
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -40,6 +43,13 @@ class RawFilePickerFragment : Fragment() {
     private var lastConversionFormat: OutputFormat = OutputFormat.DNG
 
     private val tag = "RawFilePicker"
+    
+    // Auto-navigate countdown
+    private var countdownJob: Job? = null
+    private var conversionCompletedSuccessfully = false  // Track if all conversions succeeded
+    private val PREFS_NAME = "raw2dng_prefs"
+    private val KEY_AUTO_NAVIGATE = "auto_navigate_gallery"
+    private val COUNTDOWN_SECONDS = 3
 
     // Filter options for the file picker
     enum class FileFilter {
@@ -201,9 +211,25 @@ class RawFilePickerFragment : Fragment() {
 
         // Done button navigates to Gallery tab with the appropriate filter
         binding.btnDone.setOnClickListener {
+            cancelCountdown()
             (activity as? MainActivity)?.navigateToGallery(lastConversionFormat)
             // Reset the view for next time
             showPickerContent()
+        }
+        
+        // Auto-navigate checkbox - load saved preference
+        val prefs = requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        binding.checkAutoNavigate.isChecked = prefs.getBoolean(KEY_AUTO_NAVIGATE, false)
+        binding.checkAutoNavigate.setOnCheckedChangeListener { _, isChecked ->
+            prefs.edit().putBoolean(KEY_AUTO_NAVIGATE, isChecked).apply()
+            if (isChecked && conversionCompletedSuccessfully) {
+                // User checked the box after successful conversion - start countdown
+                startAutoNavigateCountdown()
+            } else if (!isChecked) {
+                // If unchecked during countdown, cancel it
+                cancelCountdown()
+                binding.btnDone.text = getString(R.string.done)
+            }
         }
         
         // Setup conversion thumbnail grid
@@ -410,6 +436,9 @@ class RawFilePickerFragment : Fragment() {
     private fun startConversion(selectedFiles: List<RawFileItem>, outputFormat: OutputFormat) {
         if (selectedFiles.isEmpty()) return
         
+        // Reset the success flag for new conversion
+        conversionCompletedSuccessfully = false
+        
         // Track the format for navigation after completion
         lastConversionFormat = outputFormat
 
@@ -505,6 +534,14 @@ class RawFilePickerFragment : Fragment() {
                     
                     // Notify gallery to refresh
                     (activity as? MainActivity)?.refreshGallery()
+                    
+                    // Track if conversion completed successfully (for checkbox trigger)
+                    conversionCompletedSuccessfully = (failed == 0 && successful > 0)
+                    
+                    // Auto-navigate if checkbox is checked AND all conversions succeeded
+                    if (binding.checkAutoNavigate.isChecked && conversionCompletedSuccessfully) {
+                        startAutoNavigateCountdown()
+                    }
                 }
             }
         )
@@ -531,11 +568,33 @@ class RawFilePickerFragment : Fragment() {
         binding.pickerContent.visibility = View.GONE
         binding.conversionOverlay.visibility = View.VISIBLE
         conversionThumbnailAdapter.clear()
+        cancelCountdown()
     }
 
     private fun showPickerContent() {
         binding.conversionOverlay.visibility = View.GONE
         binding.pickerContent.visibility = View.VISIBLE
+        cancelCountdown()
+        conversionCompletedSuccessfully = false  // Reset flag when leaving conversion overlay
+        binding.btnDone.text = getString(R.string.done)
+    }
+    
+    private fun startAutoNavigateCountdown() {
+        countdownJob?.cancel()
+        countdownJob = viewLifecycleOwner.lifecycleScope.launch {
+            for (seconds in COUNTDOWN_SECONDS downTo 1) {
+                binding.btnDone.text = getString(R.string.done_countdown, seconds)
+                delay(1000)
+            }
+            // Time's up - navigate to gallery
+            (activity as? MainActivity)?.navigateToGallery(lastConversionFormat)
+            showPickerContent()
+        }
+    }
+    
+    private fun cancelCountdown() {
+        countdownJob?.cancel()
+        countdownJob = null
     }
 
     private fun copyUriToCache(uri: Uri, fileName: String): String {
@@ -639,6 +698,7 @@ class RawFilePickerFragment : Fragment() {
     override fun onDestroyView() {
         super.onDestroyView()
         conversionQueue?.cancel()
+        cancelCountdown()
         _binding = null
     }
 
