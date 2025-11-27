@@ -179,6 +179,7 @@ class GalleryFragment : Fragment() {
             if (currentFilter != GalleryFilter.ALL) {
                 currentFilter = GalleryFilter.ALL
                 updateFilterChipStates()
+                // ALL is less restrictive than DNG_ONLY or JPEG_ONLY, so keep selections
                 loadImages()
             }
         }
@@ -187,6 +188,8 @@ class GalleryFragment : Fragment() {
             if (currentFilter != GalleryFilter.DNG_ONLY) {
                 currentFilter = GalleryFilter.DNG_ONLY
                 updateFilterChipStates()
+                // DNG is more restrictive than ALL, or different type than JPEG - clear selections
+                clearSelectionOnFilterChange()
                 loadImages()
             }
         }
@@ -195,9 +198,21 @@ class GalleryFragment : Fragment() {
             if (currentFilter != GalleryFilter.JPEG_ONLY) {
                 currentFilter = GalleryFilter.JPEG_ONLY
                 updateFilterChipStates()
+                // JPEG is more restrictive than ALL, or different type than DNG - clear selections
+                clearSelectionOnFilterChange()
                 loadImages()
             }
         }
+    }
+    
+    /**
+     * Clear any active selection when filter changes to a more restrictive filter.
+     * Selections are preserved when going to ALL (less restrictive).
+     * Selections are cleared when going to DNG_ONLY or JPEG_ONLY (more restrictive or different type).
+     */
+    private fun clearSelectionOnFilterChange() {
+        adapter.clearSelection()
+        updateSelectionUI(0)
     }
     
     private fun updateFilterChipStates() {

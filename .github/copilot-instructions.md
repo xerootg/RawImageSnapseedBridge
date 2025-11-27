@@ -89,7 +89,7 @@ com.raw2dng/
 ├── GalleryAdapter.kt         # RecyclerView adapter with multi-select
 ├── GalleryItem.kt            # Data class for gallery items
 │
-├── ConversionQueue.kt        # Manages sequential conversion jobs
+├── ConversionQueue.kt        # Manages parallel conversion jobs with configurable parallelism
 ├── ConversionThumbnailAdapter.kt # Adapter for conversion progress thumbnails
 ├── ConvertedFilesHelper.kt   # Checks conversion status by file existence
 ├── OutputFormat.kt           # Enum: DNG, JPEG
@@ -144,22 +144,28 @@ RawFilePickerFragment.startConversion()
     - needsConfirmation items start as NEEDS_CONFIRMATION
   → Show conversion overlay with thumbnail grid
   → Set up onOverwriteConfirmed callback for dynamic task creation
+  → For each file, generate unique ID (UUID) for cache isolation
+  → Copy files to cache with unique names (e.g., DSC_0001_a1b2c3d4.NEF)
   → ConversionQueue.addTasks() for readyToConvert items only
-  → ConversionQueue.start() begins processing
-  → For each task:
+  → ConversionQueue.start() begins parallel processing (default: 2 workers)
+  → Workers pull tasks from Channel and process in parallel:
+    → Semaphore controls maximum concurrent conversions
     → onTaskStarting callback marks item as IN_PROGRESS
-    → DNGConverter.convertToDNG() [JNI]
+    → DNGConverter.convertToDNG() [JNI] - thread-safe with TLS
     → native dng_converter.cpp
-      → libraw_reader reads RAW data
+      → libraw_reader reads RAW data (per-thread LibRaw instance)
       → libraw_to_dng creates DNG (if format includes DNG)
       → jpeg_converter creates JPEG (if format includes JPEG)
     → onTaskComplete callback:
       → Mark item SUCCESS or ERROR in thumbnail grid
-      → Increment global progress bar
+      → Increment global progress bar (AtomicInteger counters)
+      → Save to public storage with ORIGINAL filename (not UUID)
+      → Clean up both input and output cache files
       → File written to Pictures/Raw2DNG/ or Pictures/Raw2DNG/JPEG/
   → When user taps NEEDS_CONFIRMATION item:
-    → onOverwriteConfirmed callback creates task
-    → ConversionQueue.addTaskDynamic() adds to running queue
+    → onOverwriteConfirmed callback creates task with unique ID
+    → ConversionQueue.addTaskDynamic() sends to channel
+    → Workers pick up task immediately
     → Item changes to PENDING, then IN_PROGRESS when processing starts
   → MediaScanner notified
   → onAllComplete:
@@ -205,6 +211,13 @@ GalleryFragment.loadImages()
   → Scan Pictures/Raw2DNG/JPEG/*.jpg
   → Apply current filter (DNG_ONLY, JPEG_ONLY, ALL)
   → Update RecyclerView
+
+GalleryFragment.setupFilterChips()
+  → When filter changes to more restrictive (ALL→DNG, ALL→JPEG, DNG→JPEG, JPEG→DNG):
+    → clearSelectionOnFilterChange() clears any active multi-select
+    → Updates selection UI (hides "Open in..." button)
+  → When filter changes to less restrictive (DNG→ALL, JPEG→ALL):
+    → Selections are preserved
 ```
 
 ### Conversion Status Sync
@@ -269,6 +282,7 @@ ImagePreviewDialog
 13. **Log/Thumbnail Toggle**: Switch between visual progress grid and text log during conversion
 14. **Tab Navigation Cleanup**: Conversion overlay clears when navigating away if done
 15. **Screen Rotation Handling**: State preserved via configChanges (no activity recreation)
+16. **Gallery Filter Clear Selection**: Changing gallery filter clears any active selection
 
 ### Color Matrix Handling
 
@@ -296,6 +310,11 @@ The app includes hardcoded color matrices for cameras not fully supported by Lib
 16. **Thread-safe counters**: Uses AtomicInteger for startedCount, completedCount, successfulCount, failedCount
 17. **Overwrite detection**: Based on RawFileItem.isConvertedToDng/Jpeg matching OutputFormat
 18. **localtime_r()**: Thread-safe timestamp conversion in C++ (required for parallel JNI calls)
+19. **LibRaw thread-safety**: CMakeLists.txt does NOT define LIBRAW_NOTHREADS, enabling LibRaw's thread-local storage (TLS)
+20. **Unique cache file IDs**: UUID-based filenames prevent parallel file access conflicts (e.g., DSC_0001_a1b2c3d4.NEF)
+21. **Original filename for public storage**: saveToPublicStorage() uses original filename, not UUID-based cache filename
+22. **Cache cleanup**: Both input and output cache files are deleted after each conversion task completes
+23. **Gallery filter clears selection**: Changing filters calls clearSelectionOnFilterChange() to prevent stale item references
 
 ### Testing Checklist
 
@@ -322,6 +341,8 @@ When making changes, verify:
 - [ ] Tapping overwrite confirmation queues and processes the file
 - [ ] Tapping multiple overwrites during conversion processes all of them
 - [ ] Done button disabled until all confirmations resolved or converted
+- [ ] Parallel conversion of multiple files produces non-corrupt output
+- [ ] Changing gallery filter clears any active selection
 
 ### Common Issues
 
@@ -329,3 +350,5 @@ When making changes, verify:
 2. **Wrong colors**: Check color matrix application and camera model detection
 3. **Badges not updating**: Ensure `refreshConversionStatus()` is called in `onResume()`
 4. **Install fails**: Run `adb uninstall com.raw2dng` first if signing keys changed
+5. **Corrupt output during parallel conversion**: Ensure `LIBRAW_NOTHREADS` is NOT defined in CMakeLists.txt (LibRaw needs Thread Local Storage enabled)
+6. **Files saved with UUID in name**: Check that `saveToPublicStorage()` receives the original filename, not the cache filename

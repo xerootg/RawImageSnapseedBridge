@@ -1,12 +1,8 @@
 # backlog
 ## high priority
 
-### bugs
-*) if something is selected in gallery tab under a filter, like jpeg, and you change filters to dng, the open in (count) button does not work until that item is in view. i'd prefer if changing filters in the gallery cleared selected items
-*) in the conversion tab, if focus changes, like to the gallery, and there were conversion selections, the 'to (format)' buttons do not show the selections and are not disabled until another selection is made and the total is updated, inclusive of previous changes
-
 ### ux
-*) in multi-select mode in gallery, previewing the selected image(s) should be possible with a button in the top bar, and in preview there should be a button a the top allowing openwith, as well as selection and de-selection of images. gutter of images should be rendered, showing selected images with a green checkmark
+*) in multi-select mode in gallery, previewing the selected image(s) should be possible with a button in the top bar, and in preview there should be a button a the top allowing openwith, as well as selection and de-selection of images. gutter of images should be rendered, showing selected images with a green checkmark. refactor the existing preview so it can work for both preview types
 *) material you should reflect the system theme. it is currently purple and my system theme is not purple.
 *) in the gallery, when multiselect is active, a button should be rendered to the right of "Open (count) in..." that says "Delete Selections"
 
