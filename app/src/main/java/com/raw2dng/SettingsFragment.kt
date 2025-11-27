@@ -25,7 +25,9 @@ class SettingsFragment : Fragment() {
         const val KEY_HIDE_CONVERTED = "hide_converted_images"
         const val KEY_OPEN_IN_SNAPSEED = "open_single_dng_in_snapseed"
         const val KEY_SHARE_SINGLE_JPEG = "share_single_jpeg_on_completion"
+        const val KEY_CONVERSION_PARALLELISM = "conversion_parallelism"
         const val DEFAULT_TIMEOUT = 3
+        const val DEFAULT_PARALLELISM = 2
         const val SNAPSEED_PACKAGE = "com.niksoftware.snapseed"
         
         // All supported RAW extensions - sourced from RawTypesDialogFragment.MANUFACTURERS
@@ -93,6 +95,25 @@ class SettingsFragment : Fragment() {
             val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             return prefs.getInt(KEY_AUTONAV_TIMEOUT, DEFAULT_TIMEOUT)
         }
+        
+        /**
+         * Get the conversion parallelism (number of concurrent conversion threads).
+         * Returns a value between 1 and the number of CPU cores.
+         */
+        fun getConversionParallelism(context: Context): Int {
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val numCores = Runtime.getRuntime().availableProcessors()
+            val saved = prefs.getInt(KEY_CONVERSION_PARALLELISM, DEFAULT_PARALLELISM)
+            // Clamp to valid range (1 to numCores)
+            return saved.coerceIn(1, numCores)
+        }
+        
+        /**
+         * Get the number of available CPU cores.
+         */
+        fun getNumCores(): Int {
+            return Runtime.getRuntime().availableProcessors()
+        }
     }
     
     // Track current selection state for RAW types
@@ -101,6 +122,7 @@ class SettingsFragment : Fragment() {
     
     // UI elements that need to be accessed for saving
     private lateinit var seekAutonavTimeout: SeekBar
+    private lateinit var seekConversionCores: SeekBar
     private lateinit var chkHideConverted: CheckBox
     private lateinit var chkOpenInSnapseed: CheckBox
     private lateinit var chkShareJpeg: CheckBox
@@ -143,6 +165,29 @@ class SettingsFragment : Fragment() {
         seekAutonavTimeout.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 updateTimeoutDisplay(txtAutonavValue, txtAutonavWarning, progress)
+                // Auto-save when changed
+                saveSettings()
+            }
+            
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+        })
+        
+        // Setup conversion parallelism
+        seekConversionCores = view.findViewById(R.id.seekConversionCores)
+        val txtConversionCoresValue = view.findViewById<TextView>(R.id.txtConversionCoresValue)
+        val numCores = getNumCores()
+        val currentParallelism = getConversionParallelism(requireContext())
+        
+        // SeekBar range is 0 to (numCores-1), representing 1 to numCores
+        seekConversionCores.max = numCores - 1
+        seekConversionCores.progress = currentParallelism - 1
+        updateParallelismDisplay(txtConversionCoresValue, currentParallelism, numCores)
+        
+        seekConversionCores.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                val parallelism = progress + 1  // Convert 0-based to 1-based
+                updateParallelismDisplay(txtConversionCoresValue, parallelism, numCores)
                 // Auto-save when changed
                 saveSettings()
             }
@@ -206,6 +251,9 @@ class SettingsFragment : Fragment() {
         
         editor.putInt(KEY_AUTONAV_TIMEOUT, seekAutonavTimeout.progress)
         
+        // Save conversion parallelism (convert 0-based seekbar to 1-based value)
+        editor.putInt(KEY_CONVERSION_PARALLELISM, seekConversionCores.progress + 1)
+        
         // Save enabled RAW types
         val enabledSet = mutableSetOf<String>()
         for (i in ALL_RAW_EXTENSIONS.indices) {
@@ -237,6 +285,10 @@ class SettingsFragment : Fragment() {
     private fun updateTimeoutDisplay(valueText: TextView, warningText: TextView, seconds: Int) {
         valueText.text = "${seconds}s"
         warningText.visibility = if (seconds == 0) View.VISIBLE else View.GONE
+    }
+    
+    private fun updateParallelismDisplay(valueText: TextView, parallelism: Int, numCores: Int) {
+        valueText.text = getString(R.string.conversion_parallelism_value, parallelism, numCores)
     }
     
     private fun updateRawTypesButtonText() {

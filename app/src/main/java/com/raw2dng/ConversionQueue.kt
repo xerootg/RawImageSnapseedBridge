@@ -44,7 +44,7 @@ class ConversionQueue(
         
         /**
          * Default degree of parallelism for conversions.
-         * TODO: Make this configurable via settings.
+         * This can be configured via Settings (1 to number of CPU cores).
          */
         const val DEFAULT_PARALLELISM = 2
     }

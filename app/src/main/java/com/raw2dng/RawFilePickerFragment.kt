@@ -880,6 +880,7 @@ class RawFilePickerFragment : Fragment() {
                     }
                 }
             },
+            parallelism = SettingsFragment.getConversionParallelism(requireContext()),
             jpegQuality = jpegQuality,
             jpegChroma = jpegChroma,
             jpegOptimize = jpegOptimize

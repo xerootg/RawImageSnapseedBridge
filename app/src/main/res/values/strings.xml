@@ -97,6 +97,9 @@
     <string name="open_settings">Open settings</string>
     <string name="autonav_timeout_label">Auto-navigate countdown (seconds)</string>
     <string name="autonav_zero_warning">⚠️ With 0 seconds, navigation happens immediately even if some conversions failed</string>
+    <string name="conversion_parallelism_label">Conversion threads</string>
+    <string name="conversion_parallelism_value">%1$d of %2$d cores</string>
+    <string name="conversion_parallelism_hint">More threads = faster conversion but higher battery/memory use</string>
     <string name="raw_types_label">RAW file types to show</string>
     <string name="raw_types_select">Select types…</string>
     <string name="raw_types_count">%1$d of %2$d types selected</string>

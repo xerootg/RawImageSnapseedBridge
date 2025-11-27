@@ -399,6 +399,7 @@ GalleryFragment.showRegenerateDialog()
 22. **File Size Display**: Gallery thumbnails show file size overlay; selection summary shows total size
 23. **Preview File Size**: Gallery preview shows current image file size and total selected size
 24. **EXIF/Metadata Overlay**: Info button in preview shows detailed image metadata in scrollable overlay
+25. **Configurable Conversion Parallelism**: Adjust number of concurrent conversion threads (1 to CPU cores)
 
 ### JPEG Encoding Settings
 
@@ -443,6 +444,12 @@ SettingsFragment.kt (Tab: Settings)
 │   ├── SeekBar with value display
 │   ├── 0 seconds shows warning (orange text)
 │   └── Auto-saved via KEY_AUTONAV_TIMEOUT
+│
+├── Conversion Threads (1 to CPU cores)
+│   ├── SeekBar with "X of Y cores" display
+│   ├── Default: 2 threads
+│   ├── Max: Runtime.getRuntime().availableProcessors()
+│   └── Auto-saved via KEY_CONVERSION_PARALLELISM
 │
 ├── Enabled RAW File Types (button → RawTypesDialogFragment)
 │   ├── ExpandableListView organized by manufacturer
@@ -502,6 +509,7 @@ RawTypesDialogFragment.kt
 SharedPreferences Keys:
   PREFS_NAME = "raw2dng_prefs"
   KEY_AUTONAV_TIMEOUT = "autonav_timeout_seconds" (Int, default: 3)
+  KEY_CONVERSION_PARALLELISM = "conversion_parallelism" (Int, default: 2, range: 1 to numCores)
   KEY_ENABLED_RAW_TYPES = "enabled_raw_types" (StringSet, default: all)
   KEY_HIDE_CONVERTED = "hide_converted_images" (Boolean, default: true)
   KEY_OPEN_IN_SNAPSEED = "open_single_dng_in_snapseed" (Boolean, default: false)
@@ -694,6 +702,9 @@ When making changes, verify:
 - [ ] "Open with" button in gallery preview works
 - [ ] Settings dialog opens from gear icon in both tabs
 - [ ] Auto-navigate timeout setting persists across app restarts
+- [ ] Conversion parallelism setting (1 to N cores) shows correct values
+- [ ] Conversion parallelism setting persists across app restarts
+- [ ] Conversion uses configured number of threads
 - [ ] RAW type selection dialog shows manufacturers as expandable groups
 - [ ] Clicking manufacturer checkbox toggles all child format checkboxes
 - [ ] RAW type selection shows X/Y count per manufacturer group
