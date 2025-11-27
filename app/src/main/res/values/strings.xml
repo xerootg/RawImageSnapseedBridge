@@ -33,6 +33,8 @@
     <string name="preview_selected">Preview</string>
     <string name="open_with_button">Open with…</string>
     <string name="delete_selected">Delete</string>
+    <string name="selection_summary">%1$d selected (%2$s)</string>
+    <string name="selection_summary_short">%1$d (%2$s)</string>
     
     <!-- RAW File Picker -->
     <string name="raw_file_thumbnail">RAW file thumbnail</string>

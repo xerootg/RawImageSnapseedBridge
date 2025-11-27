@@ -25,7 +25,8 @@ data class ThumbnailStripItem(
     val isConvertedToDng: Boolean = false,
     val isConvertedToJpeg: Boolean = false,
     val isSelected: Boolean = false,
-    val fileType: String? = null  // "DNG", "JPEG", etc. for gallery mode
+    val fileType: String? = null,  // "DNG", "JPEG", etc. for gallery mode
+    val fileSize: Long = 0  // File size in bytes for display
 )
 
 class ThumbnailStripAdapter(

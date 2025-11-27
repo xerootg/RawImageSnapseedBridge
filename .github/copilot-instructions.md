@@ -365,6 +365,8 @@ GalleryFragment.regenerateSelectedImages()
 19. **Settings Dialog**: Gear icon in both tabs opens settings with configurable auto-navigate timeout
 20. **Hide/Dim Converted Images**: Optional filter to hide or gray out already-converted images
 21. **JPEG Settings Dialog**: Configure default JPEG quality, chroma subsampling, and Huffman optimization
+22. **File Size Display**: Gallery thumbnails show file size overlay; selection summary shows total size
+23. **Preview File Size**: Gallery preview shows current image file size and total selected size
 
 ### JPEG Encoding Settings
 
@@ -535,6 +537,10 @@ When making changes, verify:
 - [ ] Regenerate shows progress dialog during conversion
 - [ ] Regenerate clears selection and refreshes gallery on completion
 - [ ] Regenerate reports count of successful/missing files
+- [ ] Gallery thumbnails show file size overlay
+- [ ] Gallery selection summary shows total size
+- [ ] Gallery preview shows file size next to filename
+- [ ] Gallery preview selection count shows total selected size
 
 ### Common Issues
 

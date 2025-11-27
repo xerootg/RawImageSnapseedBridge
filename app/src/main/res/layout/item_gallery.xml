@@ -33,6 +33,19 @@
                 android:clickable="false"
                 android:focusable="false" />
 
+            <TextView
+                android:id="@+id/fileSize"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom|end"
+                android:layout_margin="4dp"
+                android:paddingHorizontal="4dp"
+                android:paddingVertical="2dp"
+                android:background="#88000000"
+                android:textColor="@android:color/white"
+                android:textSize="10sp"
+                android:textStyle="bold" />
+
         </FrameLayout>
 
         <TextView

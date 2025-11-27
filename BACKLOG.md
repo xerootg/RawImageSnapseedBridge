@@ -1,10 +1,6 @@
 # backlog
 ## high priority
 
-### UI
-*) filesize is in thumbnails in gallery as well as preview of gallery
-*) total size of selected images is visible in preview of gallery as well as gallery picker
-
 ### exif
 *) preview view should have a button to show all exif data for both gallery and convert. it belongs with the zoom and nav controls on the bottom of the page. it should be an overlay over the image
 *) all exif data should be transfered to jpeg
@@ -18,6 +14,7 @@
 *) conversion list should be filterable by exif data like camera, lens, etc
 
 ## low priority
+*) better reprocess dialogue, maybe reuse existing one
 *) playstore???
 *) a button in settings after the licenses button to navigate to the github for this project
 *) source libraw from the jetpack source

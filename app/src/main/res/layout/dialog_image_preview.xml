@@ -49,6 +49,14 @@
             android:textColor="@android:color/white"
             android:textSize="14sp" />
 
+        <TextView
+            android:id="@+id/previewFileSize"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="#AAAAAA"
+            android:textSize="12sp"
+            android:layout_marginEnd="8dp" />
+
         <ImageButton
             android:id="@+id/btnSelectImage"
             android:layout_width="48dp"

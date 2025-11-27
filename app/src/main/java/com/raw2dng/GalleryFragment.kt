@@ -162,6 +162,12 @@ class GalleryFragment : Fragment() {
     private fun updateSelectionUI(count: Int) {
         if (count > 0) {
             binding.selectionButtonsContainer.visibility = View.VISIBLE
+            
+            // Calculate total size of selected items
+            val selectedItems = adapter.getSelectedItems()
+            val totalSize = selectedItems.sumOf { it.fileSize }
+            val formattedSize = formatFileSize(totalSize)
+            binding.selectionSummary.text = getString(R.string.selection_summary, count, formattedSize)
         } else {
             binding.selectionButtonsContainer.visibility = View.GONE
         }
@@ -176,9 +182,10 @@ class GalleryFragment : Fragment() {
         // Find the position of the double-tapped item
         val initialPosition = allItems.indexOfFirst { it.uri == item.uri }.coerceAtLeast(0)
         
-        // Build URIs, filenames, and file types for all items
+        // Build URIs, filenames, file types, and file sizes for all items
         val uris = ArrayList(allItems.map { it.uri })
         val fileNames = ArrayList(allItems.map { it.name })
+        val fileSizes = ArrayList(allItems.map { it.fileSize })
         val selectedItems = adapter.getSelectedItems()
         val selectedUris = ArrayList(selectedItems.map { it.uri })
         val fileTypes = ArrayList(allItems.map { galleryItem ->
@@ -199,6 +206,7 @@ class GalleryFragment : Fragment() {
             dngStatus = arrayListOf(),  // Not needed for gallery mode
             jpegStatus = arrayListOf(),  // Not needed for gallery mode
             fileTypes = fileTypes,
+            fileSizes = fileSizes,
             mode = PreviewMode.GALLERY_VIEW
         )
         currentPreviewDialog = dialog
@@ -226,12 +234,13 @@ class GalleryFragment : Fragment() {
         val firstSelectedUri = selectedItems.first().uri
         val initialPosition = allItems.indexOfFirst { it.uri == firstSelectedUri }.coerceAtLeast(0)
         
-        // Build URIs, filenames, and file types for all items
+        // Build URIs, filenames, file types, and file sizes for all items
         val uris = ArrayList(allItems.map { it.uri })
         val fileNames = ArrayList(allItems.map { it.name })
+        val fileSizes = ArrayList(allItems.map { it.fileSize })
         val selectedUris = ArrayList(selectedItems.map { it.uri })
-        val fileTypes = ArrayList(allItems.map { item ->
-            val ext = item.name.substringAfterLast('.', "").uppercase()
+        val fileTypes = ArrayList(allItems.map { galleryItem ->
+            val ext = galleryItem.name.substringAfterLast('.', "").uppercase()
             when (ext) {
                 "DNG" -> "DNG"
                 "JPG", "JPEG" -> "JPEG"
@@ -248,6 +257,7 @@ class GalleryFragment : Fragment() {
             dngStatus = arrayListOf(),  // Not needed for gallery mode
             jpegStatus = arrayListOf(),  // Not needed for gallery mode
             fileTypes = fileTypes,
+            fileSizes = fileSizes,
             mode = PreviewMode.GALLERY_VIEW
         )
         currentPreviewDialog = dialog
@@ -459,7 +469,8 @@ class GalleryFragment : Fragment() {
                                 id = file.absolutePath.hashCode().toLong(),
                                 uri = uri,
                                 name = file.name,
-                                dateModified = file.lastModified()
+                                dateModified = file.lastModified(),
+                                fileSize = file.length()
                             )
                         )
                     }
@@ -485,7 +496,8 @@ class GalleryFragment : Fragment() {
                                 id = file.absolutePath.hashCode().toLong(),
                                 uri = uri,
                                 name = file.name,
-                                dateModified = file.lastModified()
+                                dateModified = file.lastModified(),
+                                fileSize = file.length()
                             )
                         )
                     }

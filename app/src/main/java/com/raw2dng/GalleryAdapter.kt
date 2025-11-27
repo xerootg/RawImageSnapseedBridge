@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
+import android.text.format.Formatter
 import android.util.Size
 import android.view.GestureDetector
 import android.view.LayoutInflater
@@ -22,11 +23,24 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+/**
+ * Format file size in human-readable format (KB, MB, GB)
+ */
+fun formatFileSize(bytes: Long): String {
+    return when {
+        bytes < 1024 -> "$bytes B"
+        bytes < 1024 * 1024 -> String.format("%.1f KB", bytes / 1024.0)
+        bytes < 1024 * 1024 * 1024 -> String.format("%.1f MB", bytes / (1024.0 * 1024.0))
+        else -> String.format("%.2f GB", bytes / (1024.0 * 1024.0 * 1024.0))
+    }
+}
+
 data class GalleryItem(
     val id: Long,
     val uri: Uri,
     val name: String,
-    val dateModified: Long
+    val dateModified: Long,
+    val fileSize: Long = 0
 )
 
 class GalleryAdapter(
@@ -111,11 +125,13 @@ class GalleryAdapter(
     inner class ViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val thumbnail: ImageView = itemView.findViewById(R.id.thumbnail)
         private val fileName: TextView = itemView.findViewById(R.id.fileName)
+        private val fileSize: TextView = itemView.findViewById(R.id.fileSize)
         private val checkbox: CheckBox = itemView.findViewById(R.id.selectionCheckbox)
         private var loadJob: Job? = null
 
         fun bind(item: GalleryItem) {
             fileName.text = item.name
+            fileSize.text = formatFileSize(item.fileSize)
             
             // Show/hide checkbox based on multi-select mode
             checkbox.visibility = if (isMultiSelectMode) View.VISIBLE else View.GONE

@@ -43,6 +43,7 @@ class ImagePreviewDialog : DialogFragment() {
     private var dngStatus: ArrayList<Boolean> = arrayListOf()
     private var jpegStatus: ArrayList<Boolean> = arrayListOf()
     private var fileTypes: ArrayList<String> = arrayListOf()
+    private var fileSizes: ArrayList<Long> = arrayListOf()
     private var selectedUris: HashSet<Uri> = hashSetOf()
     private var currentPosition: Int = 0
     private var previewMode: PreviewMode = PreviewMode.RAW_CONVERSION
@@ -54,6 +55,7 @@ class ImagePreviewDialog : DialogFragment() {
     private lateinit var imagePagerAdapter: ImagePagerAdapter
     private lateinit var previewPager: ViewPager2
     private lateinit var previewFileName: TextView
+    private lateinit var previewFileSize: TextView
     private lateinit var zoomLevel: TextView
     private lateinit var thumbnailStrip: RecyclerView
     private lateinit var btnPrevious: ImageButton
@@ -72,6 +74,7 @@ class ImagePreviewDialog : DialogFragment() {
         private const val ARG_DNG_STATUS = "dng_status"
         private const val ARG_JPEG_STATUS = "jpeg_status"
         private const val ARG_FILE_TYPES = "file_types"
+        private const val ARG_FILE_SIZES = "file_sizes"
         private const val ARG_PREVIEW_MODE = "preview_mode"
 
         fun newInstance(
@@ -82,6 +85,7 @@ class ImagePreviewDialog : DialogFragment() {
             dngStatus: ArrayList<Boolean> = arrayListOf(),
             jpegStatus: ArrayList<Boolean> = arrayListOf(),
             fileTypes: ArrayList<String> = arrayListOf(),
+            fileSizes: ArrayList<Long> = arrayListOf(),
             mode: PreviewMode = PreviewMode.RAW_CONVERSION
         ): ImagePreviewDialog {
             return ImagePreviewDialog().apply {
@@ -94,6 +98,7 @@ class ImagePreviewDialog : DialogFragment() {
                     putSerializable(ARG_DNG_STATUS, dngStatus)
                     putSerializable(ARG_JPEG_STATUS, jpegStatus)
                     putStringArrayList(ARG_FILE_TYPES, fileTypes)
+                    putSerializable(ARG_FILE_SIZES, fileSizes)
                     putString(ARG_PREVIEW_MODE, mode.name)
                 }
             }
@@ -148,6 +153,10 @@ class ImagePreviewDialog : DialogFragment() {
             // Get file types
             fileTypes = it.getStringArrayList(ARG_FILE_TYPES) ?: arrayListOf()
             
+            // Get file sizes
+            @Suppress("UNCHECKED_CAST")
+            fileSizes = (it.getSerializable(ARG_FILE_SIZES) as? ArrayList<Long>) ?: arrayListOf()
+            
             // Get preview mode
             previewMode = try {
                 PreviewMode.valueOf(it.getString(ARG_PREVIEW_MODE) ?: PreviewMode.RAW_CONVERSION.name)
@@ -170,6 +179,7 @@ class ImagePreviewDialog : DialogFragment() {
 
         previewPager = view.findViewById(R.id.previewPager)
         previewFileName = view.findViewById(R.id.previewFileName)
+        previewFileSize = view.findViewById(R.id.previewFileSize)
         thumbnailStrip = view.findViewById(R.id.thumbnailStrip)
         zoomLevel = view.findViewById(R.id.zoomLevel)
         btnPrevious = view.findViewById(R.id.btnPrevious)
@@ -378,6 +388,10 @@ class ImagePreviewDialog : DialogFragment() {
         val fileName = if (currentPosition < fileNames.size) fileNames[currentPosition] else ""
         previewFileName.text = fileName
         
+        // Update file size display
+        val fileSize = if (currentPosition < fileSizes.size) fileSizes[currentPosition] else 0L
+        previewFileSize.text = if (fileSize > 0) formatFileSize(fileSize) else ""
+        
         // Update thumbnail strip selection
         thumbnailStripAdapter.setSelectedPosition(currentPosition)
         
@@ -389,6 +403,9 @@ class ImagePreviewDialog : DialogFragment() {
 
         // Update selection button state
         updateSelectionButton()
+        
+        // Update selection count and total size
+        updateSelectionCount()
     }
 
     private fun updateNavigationButtons() {
@@ -440,6 +457,22 @@ class ImagePreviewDialog : DialogFragment() {
         btnConvertDng.isEnabled = hasSelection
         btnOpenWith.isEnabled = hasSelection
         selectionCountText.text = if (count > 0) count.toString() else ""
+    }
+    
+    private fun updateSelectionCount() {
+        if (previewMode != PreviewMode.GALLERY_VIEW) return
+        
+        val count = selectedUris.size
+        if (count > 0) {
+            // Calculate total size of selected images
+            val totalSize = imageUris.mapIndexedNotNull { index, uri ->
+                if (selectedUris.contains(uri) && index < fileSizes.size) fileSizes[index] else null
+            }.sum()
+            
+            selectionCountText.text = getString(R.string.selection_summary_short, count, formatFileSize(totalSize))
+        } else {
+            selectionCountText.text = ""
+        }
     }
     
     /**
