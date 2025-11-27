@@ -125,7 +125,7 @@ com.raw2dng/
 ├── JpegSettingsDialog.kt     # JPEG conversion settings (quality, chroma, optimize)
 ├── LicensesDialog.kt         # Open source licenses display
 ├── RegenerateDialog.kt       # Regeneration settings dialog (one-time settings)
-├── ExifData.kt               # EXIF/metadata extraction helper (ExifInterface + JNI)
+├── ExifData.kt               # EXIF/metadata extraction via LibRaw JNI (unified for RAW/DNG/JPEG)
 └── FullscreenImageActivity.kt # Fullscreen RAW preview
 ```
 
@@ -486,9 +486,50 @@ SharedPreferences Keys:
 26. **Settings gear icon**: Both fragments have headerRow with settings button that opens SettingsDialog
 27. **RAW type filtering**: RawFilePickerFragment.getEnabledRawExtensions() reads from SharedPreferences
 28. **FlexboxLayout**: Google library for responsive chip layout in settings dialog
-29. **ExifData**: Helper class using ExifInterface (DNG/JPEG) or JNI extractMetadataJson (RAW)
-30. **EXIF categories**: Camera, Exposure, Lens, Image, File - displayed in scrollable overlay
-31. **extractMetadataJson()**: JNI method in libraw_reader.cpp returns JSON with RAW metadata
+29. **ExifData**: Hybrid helper class - LibRaw JNI for RAW/DNG files, ExifInterface for JPEG
+30. **EXIF categories**: Camera, Lens, Exposure, Shooting, Dimensions, GPS, Date - displayed in scrollable overlay
+31. **extractMetadataJson()**: JNI method in libraw_reader.cpp returns JSON with complete metadata
+32. **EXIF transfer to DNG**: Complete EXIF written via DNG SDK including GPS, exposure program, metering mode
+33. **EXIF transfer to JPEG**: After JPEG conversion, ExifData.writeExifToJpeg() copies EXIF from source RAW
+
+### EXIF Data Transfer
+
+The app preserves EXIF metadata when converting RAW files to DNG and JPEG formats:
+
+```
+RawMetadata struct (libraw_reader.h):
+  → Basic EXIF: make, model, iso_speed, shutter, aperture, focal_len, timestamp
+  → Lens info: lens_make, lens_model, lens_serial, min_focal, max_focal, focal_len_35mm
+  → Shooting info: exposure_program, metering_mode, description, artist, body_serial
+  → GPS data: latitude[3], longitude[3], altitude, lat_ref, lon_ref, alt_ref, timestamp[3]
+
+DNG EXIF (libraw_to_dng.cpp setExifData()):
+  → Camera: Make, Model, Software ("Raw2DNG")
+  → Exposure: ISO, ExposureTime, FNumber, ApertureValue, ShutterSpeedValue
+  → Lens: LensMake, LensName, FocalLength, FocalLengthIn35mmFilm, LensInfo
+  → Date/Time: DateTimeOriginal, DateTimeDigitized, DateTime
+  → Shooting: ExposureProgram, MeteringMode
+  → Artist: ImageDescription, Artist
+  → GPS: Latitude, Longitude, Altitude, LatitudeRef, LongitudeRef, AltitudeRef, TimeStamp
+
+JPEG EXIF (ExifData.kt writeExifToJpeg()):
+  → After JPEG conversion completes, extracts metadata via extractMetadataJson()
+  → Uses Android ExifInterface to write all available tags to JPEG file
+  → Handles GPS data formatting (degrees, minutes, seconds as rationals)
+  → Called automatically by ConversionQueue after successful JPEG conversion
+
+extractMetadataJson() output (libraw_reader.cpp):
+  → JSON includes all metadata fields for Kotlin consumption
+  → Camera: make, model, software
+  → Lens: lens_make, lens_model, lens_serial, min_focal, max_focal, focal_length_35mm
+  → Exposure: focal_length, aperture, shutter, shutter_raw, iso
+  → Shooting: exposure_program, metering_mode, description, artist, body_serial
+  → Time: timestamp, timestamp_raw
+  → Dimensions: width, height, raw_width, raw_height, orientation
+  → Color: colors, bayer_pattern
+  → GPS: has_gps, gps_lat_deg/min/sec, gps_lat_ref, gps_lon_deg/min/sec, gps_lon_ref,
+         gps_altitude, gps_alt_ref, gps_time_hour/min/sec
+```
 
 ### EXIF/Metadata Overlay
 
@@ -498,33 +539,56 @@ ImagePreviewDialog Info Button Flow:
   → exifOverlay visibility toggles (GONE ↔ VISIBLE)
   → If becoming visible:
     → loadExifData() coroutine launches
-    → PreviewMode determines extraction method:
-      - GALLERY_VIEW: ExifInterface reads DNG/JPEG EXIF tags
-      - RAW_CONVERSION: JNI extractMetadataJson() via LibRaw
-    → Metadata parsed into categories:
-      - Camera: Make, Model
-      - Exposure: ISO, Shutter Speed, Aperture, Exposure Bias
-      - Lens: Focal Length, Lens Model
-      - Image: Resolution, Orientation
-      - File: Size
-    → Categories formatted as section headers with key-value pairs
+    → ExifData.extractFromUri() called (checks file extension)
+    → For RAW/DNG: LibRaw reads metadata via JNI extractMetadataJson()
+    → For JPEG: ExifInterface reads EXIF tags
+    → Metadata displayed in formatted overlay:
+      - File: Name, Size, Type
+      - Camera: Make, Model, Body Serial
+      - Lens: Model, Serial, Focal Range
+      - Exposure: Focal Length, Aperture, Shutter, ISO, 35mm equiv
+      - Shooting: Exposure Program, Metering Mode
+      - Dimensions: Output size, Sensor size, Bayer pattern
+      - GPS: Coordinates, Altitude (if available)
+      - Date/Time
+      - Artist, Description (if available)
     → exifContent TextView updated with formatted text
     → Overlay is scrollable via exifScrollView
 
-ExifData.kt:
-  → extractExifData(context, uri, mode): Main entry point
-  → extractRawMetadata(inputPath): JNI path for RAW files
-  → parseRawMetadataJson(json): Parses JSON from native code
-  → Returns Map<String, Map<String, String>> (category → key/value pairs)
+ExifData.kt (hybrid RAW/non-RAW extraction):
+  → extractFromUri(context, uri, fileName, fileSize): Main entry point
+    → Checks if file is RAW based on extension (uses RAW_EXTENSIONS set)
+    → Copies file to temp cache location
+    → For RAW/DNG: Calls extractFromRaw() using LibRaw JNI
+    → For JPEG: Calls extractFromNonRaw() using ExifInterface
+    → Deletes temp file after extraction
+  → extractFromRaw(filePath, fileName, fileSize): LibRaw JNI path
+    → Calls DNGConverter.extractMetadata() (JNI)
+    → Parses JSON into ExifData data class
+  → extractFromNonRaw(filePath, fileName, fileSize): ExifInterface path
+    → Uses Android ExifInterface to read JPEG EXIF tags
+    → Returns ExifData data class
+  → writeExifToJpeg(rawFilePath, jpegFilePath): Write EXIF to JPEG
+    → Extracts metadata from source via LibRaw
+    → Writes to JPEG using Android ExifInterface
+  → Data class fields:
+    - Camera: make, model, bodySerial, software
+    - Lens: lensMake, lensModel, lensSerial, minFocal, maxFocal
+    - Focal: focalLength, focalLength35mm
+    - Exposure: aperture, shutterSpeed, shutterRaw, iso, exposureProgram, meteringMode
+    - Time: dateTime, timestampRaw
+    - Dimensions: width, height, rawWidth, rawHeight, orientation
+    - Color: colors, bayerPattern
+    - GPS: hasGps, gpsLatitude, gpsLongitude, gpsAltitude, gpsLatRef, gpsLonRef
+    - Other: description, artist
+    - File: fileSize, fileName, fileType, error
 
 libraw_reader.cpp:
   → extractMetadataJson(inputPath, errorMessage): Static method
-  → Returns JSON string with:
-    - camera: {make, model}
-    - exposure: {iso, shutter, aperture, exposure_bias}
-    - lens: {focal_length, lens}
-    - image: {width, height, orientation, timestamp}
-    - sensor: {raw_width, raw_height}
+  → Returns JSON string with all metadata fields
+  → Uses LibRaw's imgdata structs: idata, other, sizes, lens, shootinginfo
+  → GPS validation: Only outputs GPS if coordinates are non-zero
+  → Thread-safe: Uses localtime_r for timestamp conversion
 ```
 
 ### Testing Checklist
@@ -591,6 +655,13 @@ When making changes, verify:
 - [ ] RAW metadata overlay shows camera info for RAW files
 - [ ] EXIF overlay is scrollable for long content
 - [ ] EXIF overlay toggle works (show/hide)
+- [ ] EXIF Advanced button shows raw JSON (pretty-printed, green monospace)
+- [ ] Tap on JSON view goes back to basic view
+- [ ] Double-tap on JSON view copies JSON to clipboard
+- [ ] Converted JPEG files contain complete EXIF data (camera, lens, exposure, GPS)
+- [ ] Converted DNG files contain complete EXIF data (camera, lens, exposure, GPS)
+- [ ] GPS coordinates are preserved in both JPEG and DNG output
+- [ ] Date/time is correctly transferred to converted files
 
 ### Common Issues
 
@@ -601,3 +672,4 @@ When making changes, verify:
 5. **Corrupt output during parallel conversion**: Ensure `LIBRAW_NOTHREADS` is NOT defined in CMakeLists.txt (LibRaw needs Thread Local Storage enabled)
 6. **Files saved with UUID in name**: Check that `saveToPublicStorage()` receives the original filename, not the cache filename
 7. **RAW files not appearing**: Check settings for enabled RAW types, verify extension is in ALL_RAW_EXTENSIONS
+8. **Missing EXIF in JPEG**: Check that ExifData.writeExifToJpeg() is called after conversion in ConversionQueue

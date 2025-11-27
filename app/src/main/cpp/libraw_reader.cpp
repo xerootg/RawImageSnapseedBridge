@@ -123,12 +123,20 @@ void LibRawReader::extractMetadata() {
         }
     }
     
-    // EXIF
+    // Basic EXIF
     metadata_.iso_speed = data.other.iso_speed;
     metadata_.shutter = data.other.shutter;
     metadata_.aperture = data.other.aperture;
     metadata_.focal_len = data.other.focal_len;
     metadata_.timestamp = data.other.timestamp;
+    
+    // Description and artist
+    if (data.other.desc[0]) {
+        metadata_.description = data.other.desc;
+    }
+    if (data.other.artist[0]) {
+        metadata_.artist = data.other.artist;
+    }
     
     // Lens info
     if (data.lens.LensMake[0]) {
@@ -136,6 +144,43 @@ void LibRawReader::extractMetadata() {
     }
     if (data.lens.Lens[0]) {
         metadata_.lens_model = data.lens.Lens;
+    }
+    if (data.lens.LensSerial[0]) {
+        metadata_.lens_serial = data.lens.LensSerial;
+    }
+    metadata_.min_focal = data.lens.MinFocal;
+    metadata_.max_focal = data.lens.MaxFocal;
+    metadata_.focal_len_35mm = data.lens.FocalLengthIn35mmFormat;
+    
+    // Body serial
+    if (data.shootinginfo.BodySerial[0]) {
+        metadata_.body_serial = data.shootinginfo.BodySerial;
+    }
+    
+    // Shooting info
+    metadata_.exposure_program = data.shootinginfo.ExposureProgram;
+    metadata_.metering_mode = data.shootinginfo.MeteringMode;
+    
+    // GPS data - only set has_gps if we have actual valid coordinates
+    bool gpsParsed = (data.other.parsed_gps.gpsparsed != 0);
+    bool hasValidCoords = gpsParsed &&
+        (data.other.parsed_gps.latitude[0] != 0 || data.other.parsed_gps.latitude[1] != 0 || data.other.parsed_gps.latitude[2] != 0) &&
+        (data.other.parsed_gps.longitude[0] != 0 || data.other.parsed_gps.longitude[1] != 0 || data.other.parsed_gps.longitude[2] != 0);
+    
+    metadata_.has_gps = hasValidCoords;
+    if (metadata_.has_gps) {
+        for (int i = 0; i < 3; i++) {
+            metadata_.gps_latitude[i] = data.other.parsed_gps.latitude[i];
+            metadata_.gps_longitude[i] = data.other.parsed_gps.longitude[i];
+            metadata_.gps_timestamp[i] = data.other.parsed_gps.gpstimestamp[i];
+        }
+        metadata_.gps_altitude = data.other.parsed_gps.altitude;
+        // Sanitize ref chars - default to N/E if invalid
+        metadata_.gps_lat_ref = (data.other.parsed_gps.latref == 'N' || data.other.parsed_gps.latref == 'S') 
+            ? data.other.parsed_gps.latref : 'N';
+        metadata_.gps_lon_ref = (data.other.parsed_gps.longref == 'E' || data.other.parsed_gps.longref == 'W')
+            ? data.other.parsed_gps.longref : 'E';
+        metadata_.gps_alt_ref = data.other.parsed_gps.altref;
     }
     
     LOGD("Metadata extracted:");
@@ -145,8 +190,19 @@ void LibRawReader::extractMetadata() {
          metadata_.width, metadata_.height,
          metadata_.left_margin, metadata_.top_margin);
     LOGD("  Black: %u, Maximum: %u", metadata_.black, metadata_.maximum);
-    LOGD("  ISO: %.0f, Shutter: %.4f, Aperture: f/%.1f",
-         metadata_.iso_speed, metadata_.shutter, metadata_.aperture);
+    LOGD("  ISO: %.0f, Shutter: %.4f, Aperture: f/%.1f, Focal: %.1fmm",
+         metadata_.iso_speed, metadata_.shutter, metadata_.aperture, metadata_.focal_len);
+    LOGD("  Lens: %s %s", metadata_.lens_make.c_str(), metadata_.lens_model.c_str());
+    LOGD("  Exposure Program: %d, Metering Mode: %d", 
+         metadata_.exposure_program, metadata_.metering_mode);
+    if (metadata_.has_gps) {
+        LOGD("  GPS: %.4f°%c, %.4f°%c, Alt: %.1fm",
+             metadata_.gps_latitude[0] + metadata_.gps_latitude[1]/60.0 + metadata_.gps_latitude[2]/3600.0,
+             metadata_.gps_lat_ref,
+             metadata_.gps_longitude[0] + metadata_.gps_longitude[1]/60.0 + metadata_.gps_longitude[2]/3600.0,
+             metadata_.gps_lon_ref,
+             metadata_.gps_altitude);
+    }
     LOGD("  Bayer pattern: %s (filters=0x%x)", metadata_.cdesc, metadata_.filters);
     LOGD("  cam_mul: [%.6f, %.6f, %.6f, %.6f]", 
          metadata_.cam_mul[0], metadata_.cam_mul[1], metadata_.cam_mul[2], metadata_.cam_mul[3]);
@@ -599,6 +655,7 @@ bool LibRawReader::extractMetadataJson(const std::string& inputPath,
     auto& other = processor.imgdata.other;
     auto& sizes = processor.imgdata.sizes;
     auto& lens = processor.imgdata.lens;
+    auto& shootinginfo = processor.imgdata.shootinginfo;
     
     // Format shutter speed as a fraction
     char shutterStr[32] = "";
@@ -617,48 +674,127 @@ bool LibRawReader::extractMetadataJson(const std::string& inputPath,
         }
     }
     
-    // Build JSON
-    char json[4096];
-    snprintf(json, sizeof(json),
-        "{"
-        "\"make\":\"%s\","
-        "\"model\":\"%s\","
-        "\"lens_make\":\"%s\","
-        "\"lens_model\":\"%s\","
-        "\"focal_length\":%.1f,"
-        "\"aperture\":%.1f,"
-        "\"shutter\":\"%s\","
-        "\"shutter_raw\":%.6f,"
-        "\"iso\":%.0f,"
-        "\"timestamp\":\"%s\","
-        "\"timestamp_raw\":%ld,"
-        "\"width\":%d,"
-        "\"height\":%d,"
-        "\"raw_width\":%d,"
-        "\"raw_height\":%d,"
-        "\"orientation\":%d,"
-        "\"colors\":%d,"
-        "\"bayer_pattern\":\"%s\""
-        "}",
-        escapeJson(idata.make).c_str(),
-        escapeJson(idata.model).c_str(),
-        escapeJson(lens.LensMake).c_str(),
-        escapeJson(lens.Lens).c_str(),
-        other.focal_len,
-        other.aperture,
-        shutterStr,
-        other.shutter,
-        other.iso_speed,
-        dateStr,
-        (long)other.timestamp,
-        sizes.width,
-        sizes.height,
-        sizes.raw_width,
-        sizes.raw_height,
-        sizes.flip,
-        idata.colors,
-        escapeJson(idata.cdesc).c_str()
-    );
+    // Build JSON using string stream for cleaner construction
+    std::string json = "{";
+    
+    // Camera info
+    json += "\"make\":\"" + escapeJson(idata.make) + "\",";
+    json += "\"model\":\"" + escapeJson(idata.model) + "\",";
+    json += "\"software\":\"" + escapeJson(idata.software) + "\",";
+    
+    // Lens info
+    json += "\"lens_make\":\"" + escapeJson(lens.LensMake) + "\",";
+    json += "\"lens_model\":\"" + escapeJson(lens.Lens) + "\",";
+    json += "\"lens_serial\":\"" + escapeJson(lens.LensSerial) + "\",";
+    
+    char numBuf[128];
+    
+    // Focal lengths
+    snprintf(numBuf, sizeof(numBuf), "%.1f", other.focal_len);
+    json += "\"focal_length\":" + std::string(numBuf) + ",";
+    snprintf(numBuf, sizeof(numBuf), "%.1f", lens.MinFocal);
+    json += "\"min_focal\":" + std::string(numBuf) + ",";
+    snprintf(numBuf, sizeof(numBuf), "%.1f", lens.MaxFocal);
+    json += "\"max_focal\":" + std::string(numBuf) + ",";
+    // FocalLengthIn35mmFormat is a ushort, not float
+    snprintf(numBuf, sizeof(numBuf), "%u", (unsigned int)lens.FocalLengthIn35mmFormat);
+    json += "\"focal_length_35mm\":" + std::string(numBuf) + ",";
+    
+    // Exposure info
+    snprintf(numBuf, sizeof(numBuf), "%.1f", other.aperture);
+    json += "\"aperture\":" + std::string(numBuf) + ",";
+    json += "\"shutter\":\"" + std::string(shutterStr) + "\",";
+    snprintf(numBuf, sizeof(numBuf), "%.6f", other.shutter);
+    json += "\"shutter_raw\":" + std::string(numBuf) + ",";
+    snprintf(numBuf, sizeof(numBuf), "%.0f", other.iso_speed);
+    json += "\"iso\":" + std::string(numBuf) + ",";
+    
+    // Shooting info
+    snprintf(numBuf, sizeof(numBuf), "%d", shootinginfo.ExposureProgram);
+    json += "\"exposure_program\":" + std::string(numBuf) + ",";
+    snprintf(numBuf, sizeof(numBuf), "%d", shootinginfo.MeteringMode);
+    json += "\"metering_mode\":" + std::string(numBuf) + ",";
+    
+    // Description and artist
+    json += "\"description\":\"" + escapeJson(other.desc) + "\",";
+    json += "\"artist\":\"" + escapeJson(other.artist) + "\",";
+    
+    // Body serial
+    json += "\"body_serial\":\"" + escapeJson(shootinginfo.BodySerial) + "\",";
+    
+    // Timestamp
+    json += "\"timestamp\":\"" + std::string(dateStr) + "\",";
+    snprintf(numBuf, sizeof(numBuf), "%ld", (long)other.timestamp);
+    json += "\"timestamp_raw\":" + std::string(numBuf) + ",";
+    
+    // Dimensions
+    snprintf(numBuf, sizeof(numBuf), "%d", sizes.width);
+    json += "\"width\":" + std::string(numBuf) + ",";
+    snprintf(numBuf, sizeof(numBuf), "%d", sizes.height);
+    json += "\"height\":" + std::string(numBuf) + ",";
+    snprintf(numBuf, sizeof(numBuf), "%d", sizes.raw_width);
+    json += "\"raw_width\":" + std::string(numBuf) + ",";
+    snprintf(numBuf, sizeof(numBuf), "%d", sizes.raw_height);
+    json += "\"raw_height\":" + std::string(numBuf) + ",";
+    snprintf(numBuf, sizeof(numBuf), "%d", sizes.flip);
+    json += "\"orientation\":" + std::string(numBuf) + ",";
+    
+    // Color info
+    snprintf(numBuf, sizeof(numBuf), "%d", idata.colors);
+    json += "\"colors\":" + std::string(numBuf) + ",";
+    json += "\"bayer_pattern\":\"" + escapeJson(idata.cdesc) + "\",";
+    
+    // GPS data - only include if we have actual valid GPS coordinates
+    // gpsparsed can be non-zero even if coordinates are not available
+    bool hasGps = (other.parsed_gps.gpsparsed != 0);
+    bool hasValidGps = hasGps && 
+        (other.parsed_gps.latitude[0] != 0 || other.parsed_gps.latitude[1] != 0 || other.parsed_gps.latitude[2] != 0) &&
+        (other.parsed_gps.longitude[0] != 0 || other.parsed_gps.longitude[1] != 0 || other.parsed_gps.longitude[2] != 0);
+    
+    json += "\"has_gps\":" + std::string(hasValidGps ? "true" : "false");
+    
+    if (hasValidGps) {
+        json += ",";
+        // Latitude
+        snprintf(numBuf, sizeof(numBuf), "%.6f", other.parsed_gps.latitude[0]);
+        json += "\"gps_lat_deg\":" + std::string(numBuf) + ",";
+        snprintf(numBuf, sizeof(numBuf), "%.6f", other.parsed_gps.latitude[1]);
+        json += "\"gps_lat_min\":" + std::string(numBuf) + ",";
+        snprintf(numBuf, sizeof(numBuf), "%.6f", other.parsed_gps.latitude[2]);
+        json += "\"gps_lat_sec\":" + std::string(numBuf) + ",";
+        // Handle null or empty ref chars safely - default to N if not set
+        char latRefChar = other.parsed_gps.latref;
+        if (latRefChar == 0 || (latRefChar != 'N' && latRefChar != 'S')) latRefChar = 'N';
+        json += "\"gps_lat_ref\":\"" + std::string(1, latRefChar) + "\",";
+        
+        // Longitude
+        snprintf(numBuf, sizeof(numBuf), "%.6f", other.parsed_gps.longitude[0]);
+        json += "\"gps_lon_deg\":" + std::string(numBuf) + ",";
+        snprintf(numBuf, sizeof(numBuf), "%.6f", other.parsed_gps.longitude[1]);
+        json += "\"gps_lon_min\":" + std::string(numBuf) + ",";
+        snprintf(numBuf, sizeof(numBuf), "%.6f", other.parsed_gps.longitude[2]);
+        json += "\"gps_lon_sec\":" + std::string(numBuf) + ",";
+        // Handle null or empty ref chars safely - default to E if not set
+        char lonRefChar = other.parsed_gps.longref;
+        if (lonRefChar == 0 || (lonRefChar != 'E' && lonRefChar != 'W')) lonRefChar = 'E';
+        json += "\"gps_lon_ref\":\"" + std::string(1, lonRefChar) + "\",";
+        
+        // Altitude
+        snprintf(numBuf, sizeof(numBuf), "%.2f", other.parsed_gps.altitude);
+        json += "\"gps_altitude\":" + std::string(numBuf) + ",";
+        snprintf(numBuf, sizeof(numBuf), "%d", (int)other.parsed_gps.altref);
+        json += "\"gps_alt_ref\":" + std::string(numBuf) + ",";
+        
+        // GPS timestamp
+        snprintf(numBuf, sizeof(numBuf), "%.0f", other.parsed_gps.gpstimestamp[0]);
+        json += "\"gps_time_hour\":" + std::string(numBuf) + ",";
+        snprintf(numBuf, sizeof(numBuf), "%.0f", other.parsed_gps.gpstimestamp[1]);
+        json += "\"gps_time_min\":" + std::string(numBuf) + ",";
+        snprintf(numBuf, sizeof(numBuf), "%.2f", other.parsed_gps.gpstimestamp[2]);
+        json += "\"gps_time_sec\":" + std::string(numBuf);
+    }
+    
+    json += "}";
     
     jsonOutput = json;
     processor.recycle();

@@ -1,15 +1,21 @@
 package com.raw2dng
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.view.GestureDetector
 import android.view.LayoutInflater
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.ImageButton
+import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.fragment.app.DialogFragment
@@ -20,7 +26,6 @@ import androidx.viewpager2.widget.ViewPager2
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.File
 
 /**
  * Preview mode determines which UI elements are shown
@@ -73,7 +78,15 @@ class ImagePreviewDialog : DialogFragment() {
     private lateinit var selectionCountText: TextView
     private lateinit var exifOverlay: FrameLayout
     private lateinit var exifText: TextView
+    private lateinit var exifScrollView: ScrollView
+    private lateinit var jsonScrollView: ScrollView
+    private lateinit var jsonText: TextView
+    private lateinit var btnAdvanced: android.widget.Button
+    private lateinit var exifTapToClose: TextView
     private lateinit var btnInfo: ImageButton
+    
+    private var isAdvancedView = false
+    private var currentRawJson: String = ""
 
     companion object {
         private const val ARG_URIS = "uris"
@@ -197,6 +210,11 @@ class ImagePreviewDialog : DialogFragment() {
         btnInfo = view.findViewById(R.id.btnInfo)
         exifOverlay = view.findViewById(R.id.exifOverlay)
         exifText = view.findViewById(R.id.exifText)
+        exifScrollView = view.findViewById(R.id.exifScrollView)
+        jsonScrollView = view.findViewById(R.id.jsonScrollView)
+        jsonText = view.findViewById(R.id.jsonText)
+        btnAdvanced = view.findViewById(R.id.btnAdvanced)
+        exifTapToClose = view.findViewById(R.id.exifTapToClose)
         
         val closeButton: ImageButton = view.findViewById(R.id.closeButton)
         val btnZoomIn: ImageButton = view.findViewById(R.id.btnZoomIn)
@@ -259,8 +277,14 @@ class ImagePreviewDialog : DialogFragment() {
             toggleExifOverlay()
         }
         
-        // Tap overlay to close - set listeners on all child views to ensure tap anywhere works
-        val closeExifListener = View.OnClickListener { hideExifOverlay() }
+        // Tap overlay to close (basic view) or go back (advanced view)
+        val closeExifListener = View.OnClickListener { 
+            if (isAdvancedView) {
+                showBasicView()
+            } else {
+                hideExifOverlay() 
+            }
+        }
         exifOverlay.setOnClickListener(closeExifListener)
         view.findViewById<View>(R.id.exifScrollView).setOnClickListener(closeExifListener)
         view.findViewById<View>(R.id.exifContent).setOnClickListener(closeExifListener)
@@ -432,6 +456,11 @@ class ImagePreviewDialog : DialogFragment() {
         
         // Update selection count and total size
         updateSelectionCount()
+        
+        // Refresh EXIF overlay if it's currently visible
+        if (exifOverlay.visibility == View.VISIBLE) {
+            refreshExifOverlay()
+        }
     }
 
     private fun updateNavigationButtons() {
@@ -511,19 +540,118 @@ class ImagePreviewDialog : DialogFragment() {
     
     private fun showExifOverlay() {
         exifOverlay.visibility = View.VISIBLE
-        exifText.text = getString(R.string.loading_exif)
+        isAdvancedView = false
+        showBasicView()
+        refreshExifOverlay()
+        setupAdvancedButton()
+        setupJsonGestureDetector()
+    }
+    
+    private fun setupAdvancedButton() {
+        btnAdvanced.setOnClickListener {
+            if (!isAdvancedView) {
+                showAdvancedView()
+            }
+        }
+    }
+    
+    private fun setupJsonGestureDetector() {
+        val gestureDetector = GestureDetector(requireContext(), object : GestureDetector.SimpleOnGestureListener() {
+            override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
+                // Single tap - go back to basic view
+                if (isAdvancedView) {
+                    showBasicView()
+                }
+                return true
+            }
+            
+            override fun onDoubleTap(e: MotionEvent): Boolean {
+                // Double tap - copy JSON to clipboard
+                if (isAdvancedView && currentRawJson.isNotEmpty()) {
+                    val clipboard = requireContext().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    val clip = ClipData.newPlainText("EXIF JSON", currentRawJson)
+                    clipboard.setPrimaryClip(clip)
+                    Toast.makeText(requireContext(), R.string.json_copied, Toast.LENGTH_SHORT).show()
+                }
+                return true
+            }
+        })
         
-        // Load EXIF data asynchronously
+        jsonScrollView.setOnTouchListener { v, event ->
+            gestureDetector.onTouchEvent(event)
+            // Let scroll view handle scrolling
+            false
+        }
+        
+        jsonText.setOnTouchListener { v, event ->
+            gestureDetector.onTouchEvent(event)
+            false
+        }
+    }
+    
+    private fun showBasicView() {
+        isAdvancedView = false
+        exifScrollView.visibility = View.VISIBLE
+        jsonScrollView.visibility = View.GONE
+        exifTapToClose.text = getString(R.string.tap_to_close)
+        btnAdvanced.text = getString(R.string.advanced)
+    }
+    
+    private fun showAdvancedView() {
+        isAdvancedView = true
+        exifScrollView.visibility = View.GONE
+        jsonScrollView.visibility = View.VISIBLE
+        exifTapToClose.text = getString(R.string.tap_to_go_back)
+        
+        // Load raw JSON
+        jsonText.text = getString(R.string.loading_exif)
         lifecycleScope.launch {
-            val exifData = loadExifData()
-            if (isAdded && exifOverlay.visibility == View.VISIBLE) {
-                exifText.text = formatExifData(exifData)
+            val json = loadRawJson()
+            if (isAdded && exifOverlay.visibility == View.VISIBLE && isAdvancedView) {
+                currentRawJson = json
+                jsonText.text = json
+            }
+        }
+    }
+    
+    private suspend fun loadRawJson(): String = withContext(Dispatchers.IO) {
+        val uri = imageUris.getOrNull(currentPosition) ?: return@withContext "{\"error\": \"No image\"}"
+        val fileName = fileNames.getOrNull(currentPosition) ?: ""
+        
+        try {
+            ExifData.extractRawJsonFromUri(requireContext(), uri, fileName)
+        } catch (e: Exception) {
+            "{\"error\": \"${e.message}\"}"
+        }
+    }
+    
+    private fun refreshExifOverlay() {
+        if (isAdvancedView) {
+            // Refresh JSON view
+            jsonText.text = getString(R.string.loading_exif)
+            lifecycleScope.launch {
+                val json = loadRawJson()
+                if (isAdded && exifOverlay.visibility == View.VISIBLE && isAdvancedView) {
+                    currentRawJson = json
+                    jsonText.text = json
+                }
+            }
+        } else {
+            // Refresh basic view
+            exifText.text = getString(R.string.loading_exif)
+            lifecycleScope.launch {
+                val exifData = loadExifData()
+                if (isAdded && exifOverlay.visibility == View.VISIBLE && !isAdvancedView) {
+                    exifText.text = formatExifData(exifData)
+                }
             }
         }
     }
     
     private fun hideExifOverlay() {
         exifOverlay.visibility = View.GONE
+        isAdvancedView = false
+        currentRawJson = ""
     }
     
     private suspend fun loadExifData(): ExifData = withContext(Dispatchers.IO) {
@@ -532,34 +660,11 @@ class ImagePreviewDialog : DialogFragment() {
         val fileSize = fileSizes.getOrNull(currentPosition) ?: 0L
         val fileType = fileTypes.getOrNull(currentPosition) ?: ""
         
-        // Check if this is a RAW file (Convert mode) or converted file (Gallery mode)
-        if (previewMode == PreviewMode.RAW_CONVERSION) {
-            // RAW file - need to copy to cache and use LibRaw
-            try {
-                val context = requireContext()
-                val cacheDir = context.cacheDir
-                val tempFile = File(cacheDir, "exif_temp_${System.currentTimeMillis()}.raw")
-                
-                // Copy file to cache
-                context.contentResolver.openInputStream(uri)?.use { input ->
-                    tempFile.outputStream().use { output ->
-                        input.copyTo(output)
-                    }
-                }
-                
-                val exif = ExifData.extractFromRaw(tempFile.absolutePath, fileName, fileSize)
-                tempFile.delete()
-                exif
-            } catch (e: Exception) {
-                ExifData(fileName = fileName, fileSize = fileSize, error = "Failed to read RAW: ${e.message}")
-            }
-        } else {
-            // Gallery mode - DNG/JPEG file, use ExifInterface
-            try {
-                ExifData.extractFromFile(requireContext(), uri, fileName, fileSize)
-            } catch (e: Exception) {
-                ExifData(fileName = fileName, fileSize = fileSize, error = "Failed to read EXIF: ${e.message}")
-            }
+        // Use LibRaw for all file types (RAW, DNG, JPEG)
+        try {
+            ExifData.extractFromUri(requireContext(), uri, fileName, fileSize)
+        } catch (e: Exception) {
+            ExifData(fileName = fileName, fileSize = fileSize, error = "Failed to read metadata: ${e.message}")
         }
     }
     
@@ -587,8 +692,17 @@ class ImagePreviewDialog : DialogFragment() {
         if (exif.camera.isNotEmpty()) {
             sb.appendLine("📷 ${exif.camera}")
         }
+        if (exif.bodySerial.isNotEmpty()) {
+            sb.appendLine("    Serial: ${exif.bodySerial}")
+        }
         if (exif.lens.isNotEmpty()) {
             sb.appendLine("🔭 ${exif.lens}")
+        }
+        if (exif.lensRangeString.isNotEmpty() && exif.lens.isNotEmpty()) {
+            sb.appendLine("    Range: ${exif.lensRangeString}")
+        }
+        if (exif.lensSerial.isNotEmpty()) {
+            sb.appendLine("    Serial: ${exif.lensSerial}")
         }
         sb.appendLine()
         
@@ -601,21 +715,57 @@ class ImagePreviewDialog : DialogFragment() {
         
         if (exposureInfo.isNotEmpty()) {
             sb.appendLine("⚙️ ${exposureInfo.joinToString("  •  ")}")
-            sb.appendLine()
         }
+        
+        // 35mm equivalent focal length (only show if different from actual focal length)
+        if (exif.focalLength35mmString.isNotEmpty() && exif.focalLength35mm != exif.focalLength.toInt()) {
+            sb.appendLine("    ${exif.focalLength35mmString}")
+        }
+        
+        // Exposure program and metering mode
+        if (exif.exposureProgramString.isNotEmpty()) {
+            sb.appendLine("    Program: ${exif.exposureProgramString}")
+        }
+        if (exif.meteringModeString.isNotEmpty()) {
+            sb.appendLine("    Metering: ${exif.meteringModeString}")
+        }
+        sb.appendLine()
         
         // Dimensions
         if (exif.dimensionsString.isNotEmpty()) {
             sb.appendLine("📐 ${exif.dimensionsString}")
         }
         if (exif.rawDimensionsString.isNotEmpty()) {
-            sb.appendLine("📐 Sensor: ${exif.rawDimensionsString}")
+            sb.appendLine("    Sensor: ${exif.rawDimensionsString}")
+        }
+        
+        // Bayer pattern
+        if (exif.bayerPattern.isNotEmpty()) {
+            sb.appendLine("    Pattern: ${exif.bayerPattern}")
+        }
+        
+        // GPS
+        if (exif.hasGps) {
+            sb.appendLine()
+            sb.appendLine("📍 ${exif.gpsString}")
+            if (exif.gpsAltitudeString.isNotEmpty()) {
+                sb.appendLine("    Altitude: ${exif.gpsAltitudeString}")
+            }
         }
         
         // Date
         if (exif.dateTime.isNotEmpty()) {
             sb.appendLine()
             sb.appendLine("📅 ${exif.dateTime}")
+        }
+        
+        // Artist and description
+        if (exif.artist.isNotEmpty()) {
+            sb.appendLine()
+            sb.appendLine("👤 ${exif.artist}")
+        }
+        if (exif.description.isNotEmpty()) {
+            sb.appendLine("📝 ${exif.description}")
         }
         
         return sb.toString().trimEnd()

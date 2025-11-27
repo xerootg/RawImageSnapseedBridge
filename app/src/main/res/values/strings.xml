@@ -64,6 +64,11 @@
     <string name="exif_title">Image Information</string>
     <string name="tap_to_close">Tap anywhere to close</string>
     <string name="loading_exif">Loading…</string>
+    <string name="advanced">Advanced</string>
+    <string name="basic">Basic</string>
+    <string name="raw_json_title">Raw Metadata (JSON)</string>
+    <string name="tap_to_go_back">Tap to go back • Double-tap to copy</string>
+    <string name="json_copied">JSON copied to clipboard</string>
     <string name="thumbnail">Thumbnail</string>
     <string name="previous_image">Previous image</string>
     <string name="next_image">Next image</string>

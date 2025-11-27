@@ -2,8 +2,9 @@
 ## high priority
 
 ### exif
-*) all exif data should be transfered to jpeg
-*) all exif data should be transfered to dng
+*) ~~all exif data should be transfered to jpeg~~ ✅ DONE
+*) ~~all exif data should be transfered to dng~~ ✅ DONE
+*) exif data overlay should be complete - all available exif data should be rendered
 
 ### raw handling
 *) rotation of the input should be transfered to the dng, even if that means rotating the image in memory before writing the dng

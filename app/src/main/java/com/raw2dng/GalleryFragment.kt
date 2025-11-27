@@ -910,13 +910,20 @@ class GalleryFragment : Fragment() {
             // Convert
             val errorMessage = when (outputFormat) {
                 OutputFormat.DNG -> converter.convertToDNG(cacheInputFile.absolutePath, cacheOutputFile.absolutePath)
-                OutputFormat.JPEG -> converter.convertToJPEG(
-                    cacheInputFile.absolutePath,
-                    cacheOutputFile.absolutePath,
-                    jpegQuality,
-                    jpegChroma,
-                    jpegOptimize
-                )
+                OutputFormat.JPEG -> {
+                    val result = converter.convertToJPEG(
+                        cacheInputFile.absolutePath,
+                        cacheOutputFile.absolutePath,
+                        jpegQuality,
+                        jpegChroma,
+                        jpegOptimize
+                    )
+                    // If JPEG conversion succeeded, write EXIF data from the source RAW
+                    if (result.isEmpty()) {
+                        ExifData.writeExifToJpeg(cacheInputFile.absolutePath, cacheOutputFile.absolutePath)
+                    }
+                    result
+                }
             }
             
             if (errorMessage.isNotEmpty()) {

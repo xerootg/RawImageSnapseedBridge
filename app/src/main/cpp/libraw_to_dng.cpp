@@ -211,6 +211,17 @@ static void setExifData(dng_negative& negative, const RawMetadata& meta) {
     exif->fMake.Set(meta.make.c_str());
     exif->fModel.Set(meta.model.c_str());
     
+    // Software identifier
+    exif->fSoftware.Set("Raw2DNG");
+    
+    // Description and artist
+    if (!meta.description.empty()) {
+        exif->fImageDescription.Set(meta.description.c_str());
+    }
+    if (!meta.artist.empty()) {
+        exif->fArtist.Set(meta.artist.c_str());
+    }
+    
     // Exposure settings
     if (meta.iso_speed > 0) {
         exif->fISOSpeedRatings[0] = (uint32)meta.iso_speed;
@@ -218,14 +229,37 @@ static void setExifData(dng_negative& negative, const RawMetadata& meta) {
     
     if (meta.shutter > 0) {
         exif->fExposureTime.Set_real64(meta.shutter, 1000000);
+        // Also set ShutterSpeedValue (APEX value = -log2(exposure time))
+        if (meta.shutter > 0) {
+            double apex = -log2(meta.shutter);
+            exif->fShutterSpeedValue.Set_real64(apex, 1000);
+        }
     }
     
     if (meta.aperture > 0) {
         exif->fFNumber.Set_real64(meta.aperture, 10);
+        // Also set ApertureValue (APEX value = 2 * log2(f-number))
+        double apex = 2.0 * log2(meta.aperture);
+        exif->fApertureValue.Set_real64(apex, 1000);
     }
     
     if (meta.focal_len > 0) {
         exif->fFocalLength.Set_real64(meta.focal_len, 10);
+    }
+    
+    // 35mm equivalent focal length
+    if (meta.focal_len_35mm > 0) {
+        exif->fFocalLengthIn35mmFilm = (uint32)meta.focal_len_35mm;
+    }
+    
+    // Exposure program (0=Not defined, 1=Manual, 2=Normal, 3=Aperture priority, etc.)
+    if (meta.exposure_program > 0) {
+        exif->fExposureProgram = (uint32)meta.exposure_program;
+    }
+    
+    // Metering mode (0=Unknown, 1=Average, 2=CenterWeighted, 3=Spot, 5=Matrix, etc.)
+    if (meta.metering_mode > 0) {
+        exif->fMeteringMode = (uint32)meta.metering_mode;
     }
     
     // Date/time
@@ -245,6 +279,7 @@ static void setExifData(dng_negative& negative, const RawMetadata& meta) {
             dtInfo.SetDateTime(dt);
             exif->fDateTimeOriginal = dtInfo;
             exif->fDateTimeDigitized = dtInfo;
+            exif->fDateTime = dtInfo;
         }
     }
     
@@ -256,8 +291,54 @@ static void setExifData(dng_negative& negative, const RawMetadata& meta) {
         exif->fLensName.Set(meta.lens_model.c_str());
     }
     
-    LOGD("Set EXIF: ISO %.0f, %.4fs, f/%.1f, %.1fmm",
-         meta.iso_speed, meta.shutter, meta.aperture, meta.focal_len);
+    // Lens focal range for LensInfo tag
+    if (meta.min_focal > 0 && meta.max_focal > 0) {
+        // LensInfo is set via negative's lens info, not directly in EXIF
+        // The fLensInfo field in dng_exif contains [MinFocal, MaxFocal, MaxApMinFocal, MaxApMaxFocal]
+        exif->fLensInfo[0].Set_real64(meta.min_focal, 10);
+        exif->fLensInfo[1].Set_real64(meta.max_focal, 10);
+    }
+    
+    // GPS data
+    if (meta.has_gps) {
+        // GPS Version ID (2.3.0.0 is common)
+        exif->fGPSVersionID = 0x02030000;
+        
+        // Latitude
+        exif->fGPSLatitudeRef.Set(meta.gps_lat_ref == 'S' ? "S" : "N");
+        exif->fGPSLatitude[0].Set_real64(meta.gps_latitude[0], 1);  // Degrees
+        exif->fGPSLatitude[1].Set_real64(meta.gps_latitude[1], 1);  // Minutes
+        exif->fGPSLatitude[2].Set_real64(meta.gps_latitude[2], 1000); // Seconds
+        
+        // Longitude
+        exif->fGPSLongitudeRef.Set(meta.gps_lon_ref == 'W' ? "W" : "E");
+        exif->fGPSLongitude[0].Set_real64(meta.gps_longitude[0], 1);  // Degrees
+        exif->fGPSLongitude[1].Set_real64(meta.gps_longitude[1], 1);  // Minutes
+        exif->fGPSLongitude[2].Set_real64(meta.gps_longitude[2], 1000); // Seconds
+        
+        // Altitude
+        exif->fGPSAltitudeRef = (meta.gps_alt_ref != 0) ? 1 : 0;  // 0 = above sea level, 1 = below
+        exif->fGPSAltitude.Set_real64(fabs(meta.gps_altitude), 100);
+        
+        // GPS timestamp
+        if (meta.gps_timestamp[0] > 0 || meta.gps_timestamp[1] > 0 || meta.gps_timestamp[2] > 0) {
+            exif->fGPSTimeStamp[0].Set_real64(meta.gps_timestamp[0], 1);  // Hours
+            exif->fGPSTimeStamp[1].Set_real64(meta.gps_timestamp[1], 1);  // Minutes
+            exif->fGPSTimeStamp[2].Set_real64(meta.gps_timestamp[2], 1000); // Seconds
+        }
+        
+        LOGD("Set GPS EXIF: %.6f°%c, %.6f°%c, Alt: %.1fm",
+             meta.gps_latitude[0] + meta.gps_latitude[1]/60.0 + meta.gps_latitude[2]/3600.0,
+             meta.gps_lat_ref,
+             meta.gps_longitude[0] + meta.gps_longitude[1]/60.0 + meta.gps_longitude[2]/3600.0,
+             meta.gps_lon_ref,
+             meta.gps_altitude);
+    }
+    
+    LOGD("Set EXIF: ISO %.0f, %.4fs, f/%.1f, %.1fmm (35mm: %.0fmm)",
+         meta.iso_speed, meta.shutter, meta.aperture, meta.focal_len, meta.focal_len_35mm);
+    LOGD("Set EXIF: ExposureProgram=%d, MeteringMode=%d, Artist='%s'",
+         meta.exposure_program, meta.metering_mode, meta.artist.c_str());
 }
 
 // Main conversion function

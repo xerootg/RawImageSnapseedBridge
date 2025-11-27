@@ -63,7 +63,7 @@ struct RawMetadata {
     // Camera to XYZ color matrix
     float cam_xyz[4][3];
     
-    // EXIF data
+    // Basic EXIF data
     float iso_speed;
     float shutter;      // Exposure time in seconds
     float aperture;     // F-number
@@ -73,6 +73,27 @@ struct RawMetadata {
     // Lens info
     std::string lens_make;
     std::string lens_model;
+    std::string lens_serial;
+    float min_focal;
+    float max_focal;
+    float focal_len_35mm;   // 35mm equivalent focal length
+    
+    // Additional EXIF
+    std::string description;
+    std::string artist;
+    std::string body_serial;
+    short exposure_program;  // 0=Not defined, 1=Manual, 2=Normal, 3=Aperture priority, etc.
+    short metering_mode;     // 0=Unknown, 1=Average, 2=CenterWeighted, 3=Spot, 5=Matrix, etc.
+    
+    // GPS data
+    bool has_gps;
+    float gps_latitude[3];   // Degrees, minutes, seconds
+    float gps_longitude[3];  // Degrees, minutes, seconds
+    float gps_altitude;
+    char gps_lat_ref;        // 'N' or 'S'
+    char gps_lon_ref;        // 'E' or 'W'
+    char gps_alt_ref;        // 0 = above sea level, 1 = below
+    float gps_timestamp[3];  // Hours, minutes, seconds
 };
 
 class LibRawReader {

@@ -179,13 +179,20 @@ class ConversionQueue(
             // Perform the conversion based on format
             val errorMessage = when (task.outputFormat) {
                 OutputFormat.DNG -> converter.convertToDNG(task.inputPath, task.outputPath)
-                OutputFormat.JPEG -> converter.convertToJPEG(
-                    task.inputPath, 
-                    task.outputPath, 
-                    jpegQuality,
-                    jpegChroma,
-                    jpegOptimize
-                )
+                OutputFormat.JPEG -> {
+                    val result = converter.convertToJPEG(
+                        task.inputPath, 
+                        task.outputPath, 
+                        jpegQuality,
+                        jpegChroma,
+                        jpegOptimize
+                    )
+                    // If JPEG conversion succeeded, write EXIF data from the source RAW
+                    if (result.isEmpty()) {
+                        ExifData.writeExifToJpeg(task.inputPath, task.outputPath)
+                    }
+                    result
+                }
             }
 
             completedCount.incrementAndGet()
