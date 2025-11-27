@@ -78,7 +78,7 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:layout_marginEnd="8dp"
+            android:layout_marginEnd="4dp"
             android:text="@string/preview_selected"
             style="@style/Widget.MaterialComponents.Button" />
 
@@ -87,7 +87,16 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
+            android:layout_marginEnd="4dp"
             android:text="@string/open_selected"
+            style="@style/Widget.MaterialComponents.Button" />
+
+        <Button
+            android:id="@+id/deleteSelectedButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/delete_selected"
             style="@style/Widget.MaterialComponents.Button" />
 
     </LinearLayout>

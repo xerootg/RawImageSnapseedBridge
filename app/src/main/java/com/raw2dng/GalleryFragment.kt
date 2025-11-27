@@ -136,6 +136,10 @@ class GalleryFragment : Fragment() {
             previewSelectedImages()
         }
         
+        binding.deleteSelectedButton.setOnClickListener {
+            deleteSelectedImages()
+        }
+        
         // Setup filter chips
         setupFilterChips()
     }
@@ -197,6 +201,57 @@ class GalleryFragment : Fragment() {
                 adapter.setSelectionFromUris(finalSelection)
             }
             currentPreviewDialog = null
+        }
+    }
+    
+    private fun deleteSelectedImages() {
+        val selectedItems = adapter.getSelectedItems()
+        if (selectedItems.isEmpty()) return
+        
+        val urisToDelete = selectedItems.map { it.uri }
+        
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            try {
+                val deleteRequest = MediaStore.createDeleteRequest(
+                    requireContext().contentResolver,
+                    urisToDelete
+                )
+                deleteRequestLauncher.launch(
+                    IntentSenderRequest.Builder(deleteRequest.intentSender).build()
+                )
+                // Clear selection - adapter will be refreshed after deletion via deleteRequestLauncher
+                adapter.clearSelection()
+            } catch (e: Exception) {
+                Log.e(tag, "Failed to create delete request", e)
+                Toast.makeText(requireContext(), "Failed to delete files: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        } else {
+            // For older Android versions, show confirmation dialog first
+            androidx.appcompat.app.AlertDialog.Builder(requireContext())
+                .setTitle("Delete ${selectedItems.size} file(s)?")
+                .setMessage("This action cannot be undone.")
+                .setPositiveButton("Delete") { _, _ ->
+                    viewLifecycleOwner.lifecycleScope.launch {
+                        val deletedCount = withContext(Dispatchers.IO) {
+                            var count = 0
+                            selectedItems.forEach { item ->
+                                try {
+                                    val result = requireContext().contentResolver.delete(item.uri, null, null)
+                                    if (result > 0) count++
+                                } catch (e: Exception) {
+                                    Log.e(tag, "Failed to delete ${item.name}", e)
+                                }
+                            }
+                            count
+                        }
+                        Toast.makeText(requireContext(), "Deleted $deletedCount file(s)", Toast.LENGTH_SHORT).show()
+                        adapter.clearSelection()
+                        loadImages()
+                        (activity as? MainActivity)?.refreshConvertTab()
+                    }
+                }
+                .setNegativeButton("Cancel", null)
+                .show()
         }
     }
     

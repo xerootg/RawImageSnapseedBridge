@@ -3,7 +3,6 @@
 
 ### ux
 *) material you should reflect the system theme. it is currently purple and my system theme is not purple.
-*) in the gallery, when multiselect is active, a button should be rendered to the right of "Open (count) in..." that says "Delete Selections"
 
 ### conversion workflow
 *) jpeg quality is very noisy, lets encode that at a higher quality for export versus thumbnails
