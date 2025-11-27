@@ -230,7 +230,8 @@ static void setExifData(dng_negative& negative, const RawMetadata& meta) {
     
     // Date/time
     if (meta.timestamp > 0) {
-        struct tm* timeinfo = localtime(&meta.timestamp);
+        struct tm timeinfo_buf;
+        struct tm* timeinfo = localtime_r(&meta.timestamp, &timeinfo_buf);
         if (timeinfo) {
             dng_date_time dt;
             dt.fYear = timeinfo->tm_year + 1900;

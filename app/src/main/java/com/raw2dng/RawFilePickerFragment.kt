@@ -30,6 +30,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.util.Date
 import java.util.Locale
+import java.util.UUID
 
 class RawFilePickerFragment : Fragment() {
 
@@ -536,8 +537,9 @@ class RawFilePickerFragment : Fragment() {
             val rawFile = uriToRawFile[uri] ?: return@setOnOverwriteConfirmed
             try {
                 val fileName = rawFile.name
-                val inputPath = copyUriToCache(uri, fileName)
-                val outputFileName = fileName.substringBeforeLast('.') + ".$extension"
+                val uniqueId = UUID.randomUUID().toString().take(8)
+                val inputPath = copyUriToCache(uri, fileName, uniqueId)
+                val outputFileName = fileName.substringBeforeLast('.') + "_${uniqueId}.$extension"
                 val outputPath = File(requireContext().cacheDir, outputFileName).absolutePath
                 
                 val task = ConversionTask(uri, inputPath, outputPath, fileName, outputFormat)
@@ -555,8 +557,9 @@ class RawFilePickerFragment : Fragment() {
         val tasks = readyToConvert.mapNotNull { rawFile ->
             try {
                 val fileName = rawFile.name
-                val inputPath = copyUriToCache(rawFile.uri, fileName)
-                val outputFileName = fileName.substringBeforeLast('.') + ".$extension"
+                val uniqueId = UUID.randomUUID().toString().take(8)
+                val inputPath = copyUriToCache(rawFile.uri, fileName, uniqueId)
+                val outputFileName = fileName.substringBeforeLast('.') + "_${uniqueId}.$extension"
                 val outputPath = File(requireContext().cacheDir, outputFileName).absolutePath
 
                 ConversionTask(rawFile.uri, inputPath, outputPath, fileName, outputFormat)
@@ -584,10 +587,19 @@ class RawFilePickerFragment : Fragment() {
                     binding.conversionProgressBar.progress = completed
                     binding.conversionStatus.text = "$completed/$fileCount"
                     
+                    // Clean up cache files (both input and output)
+                    val inputFile = File(result.task.inputPath)
+                    val outputFile = File(result.task.outputPath)
+                    
                     if (result.success) {
-                        val outputFile = File(result.task.outputPath)
-                        saveToPublicStorage(outputFile, result.task.outputFormat)
+                        // Use original filename (without UUID) for public storage
+                        val originalBaseName = result.task.fileName.substringBeforeLast('.')
+                        val outputExtension = if (result.task.outputFormat == OutputFormat.DNG) "dng" else "jpg"
+                        val publicFileName = "$originalBaseName.$outputExtension"
+                        
+                        saveToPublicStorage(outputFile, result.task.outputFormat, publicFileName)
                         outputFile.delete()
+                        inputFile.delete()  // Clean up cached input file
                         
                         // Mark success in thumbnail grid
                         conversionThumbnailAdapter.markSuccess(result.task.inputUri)
@@ -597,6 +609,10 @@ class RawFilePickerFragment : Fragment() {
                         // Immediately update the RawFileItem's conversion status
                         updateItemConversionStatus(result.task.inputUri, result.task.outputFormat)
                     } else {
+                        // Clean up cache files even on failure
+                        outputFile.delete()
+                        inputFile.delete()
+                        
                         // Mark error in thumbnail grid
                         conversionThumbnailAdapter.markError(result.task.inputUri, result.errorMessage)
                         Log.e(tag, "✗ ${result.task.fileName}: ${result.errorMessage}")
@@ -711,8 +727,18 @@ class RawFilePickerFragment : Fragment() {
         countdownJob = null
     }
 
-    private fun copyUriToCache(uri: Uri, fileName: String): String {
-        val cacheFile = File(requireContext().cacheDir, fileName)
+    /**
+     * Copy a URI to cache with a unique filename to prevent parallel access conflicts.
+     * @param uri The source URI to copy
+     * @param fileName Original filename (used for extension)
+     * @param uniqueId Unique identifier to prevent filename collisions
+     * @return Path to the cached file
+     */
+    private fun copyUriToCache(uri: Uri, fileName: String, uniqueId: String): String {
+        val extension = fileName.substringAfterLast('.', "")
+        val baseName = fileName.substringBeforeLast('.')
+        val uniqueFileName = "${baseName}_${uniqueId}.$extension"
+        val cacheFile = File(requireContext().cacheDir, uniqueFileName)
         requireContext().contentResolver.openInputStream(uri)?.use { input ->
             FileOutputStream(cacheFile).use { output ->
                 input.copyTo(output)
@@ -721,15 +747,15 @@ class RawFilePickerFragment : Fragment() {
         return cacheFile.absolutePath
     }
 
-    private fun saveToPublicStorage(sourceFile: File, outputFormat: OutputFormat = OutputFormat.DNG): Uri? {
+    private fun saveToPublicStorage(sourceFile: File, outputFormat: OutputFormat = OutputFormat.DNG, displayName: String = sourceFile.name): Uri? {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            saveToMediaStore(sourceFile, outputFormat)
+            saveToMediaStore(sourceFile, outputFormat, displayName)
         } else {
-            saveToPublicDirectory(sourceFile, outputFormat)
+            saveToPublicDirectory(sourceFile, outputFormat, displayName)
         }
     }
 
-    private fun saveToMediaStore(sourceFile: File, outputFormat: OutputFormat): Uri? {
+    private fun saveToMediaStore(sourceFile: File, outputFormat: OutputFormat, displayName: String): Uri? {
         val mimeType = when (outputFormat) {
             OutputFormat.DNG -> "image/x-adobe-dng"
             OutputFormat.JPEG -> "image/jpeg"
@@ -741,7 +767,7 @@ class RawFilePickerFragment : Fragment() {
         }
         
         val contentValues = ContentValues().apply {
-            put(MediaStore.Images.Media.DISPLAY_NAME, sourceFile.name)
+            put(MediaStore.Images.Media.DISPLAY_NAME, displayName)
             put(MediaStore.Images.Media.MIME_TYPE, mimeType)
             put(MediaStore.Images.Media.RELATIVE_PATH, relativePath)
             put(MediaStore.Images.Media.IS_PENDING, 1)
@@ -770,7 +796,7 @@ class RawFilePickerFragment : Fragment() {
         }
     }
 
-    private fun saveToPublicDirectory(sourceFile: File, outputFormat: OutputFormat): Uri? {
+    private fun saveToPublicDirectory(sourceFile: File, outputFormat: OutputFormat, displayName: String): Uri? {
         return try {
             val picturesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
             val subDir = when (outputFormat) {
@@ -782,7 +808,7 @@ class RawFilePickerFragment : Fragment() {
                 outputDir.mkdirs()
             }
 
-            val destFile = File(outputDir, sourceFile.name)
+            val destFile = File(outputDir, displayName)
             sourceFile.inputStream().use { input ->
                 FileOutputStream(destFile).use { output ->
                     input.copyTo(output)

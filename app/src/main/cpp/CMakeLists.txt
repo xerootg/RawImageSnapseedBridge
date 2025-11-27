@@ -130,7 +130,7 @@ if(LIBRAW_SOURCES)
         ${LIBRAW_SOURCES}
     )
     target_compile_definitions(raw PRIVATE
-        LIBRAW_NOTHREADS=1
+        # Thread-safety enabled (no LIBRAW_NOTHREADS) - uses thread-local storage
         NO_JASPER=1
         NO_LCMS=1
     )

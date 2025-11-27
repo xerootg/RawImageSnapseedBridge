@@ -260,7 +260,7 @@ ImagePreviewDialog
 4. **Camera Color Matrices**: Applies camera-specific color matrices for accurate colors
 5. **Filter-Specific Clear**: Gallery clear button respects current filter (DNG/JPEG/All)
 6. **Multi-Select**: Long-press enables multi-select for batch operations
-7. **Sequential Conversion**: ConversionQueue processes files one at a time with dynamic task addition
+7. **Parallel Conversion**: ConversionQueue processes files in parallel with configurable parallelism (default: 2)
 8. **Conversion Progress Grid**: Visual thumbnail grid showing per-file conversion status
 9. **Overwrite Confirmation**: Previously converted files require tap to confirm before re-conversion
 10. **Real-time Status Updates**: Conversion badges update immediately after conversion/deletion
@@ -291,9 +291,11 @@ The app includes hardcoded color matrices for cameras not fully supported by Lib
 11. **conversionCompletedSuccessfully** flag enables checkbox to trigger countdown after completion
 12. **configChanges** in manifest preserves state on screen rotation (no activity recreation)
 13. **Button styling**: All buttons use Material filled style for consistency
-14. **ConversionQueue.addTaskDynamic()**: Adds task to running queue, processes immediately if idle
-15. **ConversionQueue uses index-based processing**: `completed` counter tracks progress through `tasks` list
-16. **Overwrite detection**: Based on RawFileItem.isConvertedToDng/Jpeg matching OutputFormat
+14. **ConversionQueue.addTaskDynamic()**: Adds task to channel, workers pick it up immediately
+15. **ConversionQueue.DEFAULT_PARALLELISM**: Set to 2, configurable via constructor parameter
+16. **Thread-safe counters**: Uses AtomicInteger for startedCount, completedCount, successfulCount, failedCount
+17. **Overwrite detection**: Based on RawFileItem.isConvertedToDng/Jpeg matching OutputFormat
+18. **localtime_r()**: Thread-safe timestamp conversion in C++ (required for parallel JNI calls)
 
 ### Testing Checklist
 
