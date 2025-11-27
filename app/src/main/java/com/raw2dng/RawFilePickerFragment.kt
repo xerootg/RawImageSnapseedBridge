@@ -579,6 +579,17 @@ class RawFilePickerFragment : Fragment() {
         binding.btnDone.text = getString(R.string.done)
     }
     
+    /**
+     * Clear the conversion overlay if visible. Called when user navigates away from this tab.
+     */
+    fun clearConversionOverlayIfDone() {
+        if (_binding == null) return
+        // Only clear if done button is enabled (conversion is complete)
+        if (binding.conversionOverlay.visibility == View.VISIBLE && binding.btnDone.isEnabled) {
+            showPickerContent()
+        }
+    }
+    
     private fun startAutoNavigateCountdown() {
         countdownJob?.cancel()
         countdownJob = viewLifecycleOwner.lifecycleScope.launch {

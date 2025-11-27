@@ -11,6 +11,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.viewpager2.adapter.FragmentStateAdapter
+import androidx.viewpager2.widget.ViewPager2
 import com.google.android.material.tabs.TabLayoutMediator
 import com.raw2dng.databinding.ActivityMainTabsBinding
 
@@ -99,6 +100,16 @@ class MainActivity : AppCompatActivity() {
                 else -> ""
             }
         }.attach()
+        
+        // Clear conversion overlay when switching away from Convert tab
+        binding.viewPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
+            override fun onPageSelected(position: Int) {
+                if (position != 0) {
+                    // User navigated away from Convert tab - clear overlay if done
+                    pickerFragment?.clearConversionOverlayIfDone()
+                }
+            }
+        })
     }
 
     fun refreshGallery() {

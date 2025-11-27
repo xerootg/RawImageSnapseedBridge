@@ -2,7 +2,6 @@
 ## high priority
 
 ### ux
-*) if in the conversion dialogue, we are done, but the done button is not clicked and gallery is, the convert tab returns to the convertsion dialogue. it should not, this navigation should clear the dialogue as if the user had pressed done.
 *) in conversion, a button next to Converting Files... should toggle between the thumbnails and the log messages, leaving the checkbox, overall progress bar, and done button in place. this setting should be persisted
 *) if the mediaapi is used to delete pictures, regardless of filter type, mediaapi asks permission to delete the files. do not additionally ask for permission as jpeg does now.
 *) screen rotation cancels whatever is running if converting, even if conversion is complete
