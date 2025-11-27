@@ -590,17 +590,37 @@ JPEG EXIF (ExifData.kt writeExifToJpeg()):
   → Called automatically by ConversionQueue after successful JPEG conversion
 
 extractMetadataJson() output (libraw_reader.cpp):
-  → JSON includes all metadata fields for Kotlin consumption
-  → Camera: make, model, software
-  → Lens: lens_make, lens_model, lens_serial, min_focal, max_focal, focal_length_35mm
-  → Exposure: focal_length, aperture, shutter, shutter_raw, iso
-  → Shooting: exposure_program, metering_mode, description, artist, body_serial
-  → Time: timestamp, timestamp_raw
-  → Dimensions: width, height, raw_width, raw_height, orientation
-  → Color: colors, bayer_pattern
+  → JSON includes comprehensive metadata from libraw_data_t for Kotlin consumption
+  → NULL-SAFE: Uses helper lambdas to omit null/empty/zero values:
+    - addStringIfNotEmpty(): Only adds strings if non-null and non-empty
+    - addNumberIfNonZero(): Only adds numbers if not zero
+    - addNumberIfPositive(): Only adds numbers if greater than zero
+    - addNumberIfValid(): Only adds numbers if above minimum threshold
+  → Manufacturer makernotes only added if camera-specific fields are populated
+  → Empty nested objects (e.g., color matrices, arrays) are omitted entirely
+  → Structured as nested objects for organized access:
+    - idata: libraw_iparams_t (make, model, software, dng_version, colors, filters, cdesc)
+    - sizes: libraw_image_sizes_t (dimensions, margins, flip, pixel_aspect, masks)
+    - color: libraw_colordata_t (black levels, cam_mul, pre_mul, cam_xyz, rgb_cam, cmatrix, ccm)
+    - lens: libraw_lensinfo_t (focal lengths, apertures, lens make/model, nikon lens, dng lens, makernotes lens)
+    - shootinginfo: libraw_shootinginfo_t (drive/focus/metering modes, body serial)
+    - makernotes: Manufacturer-specific data (only included if camera matches):
+      - common: libraw_metadata_common_t (temperatures, flash info, humidity, pressure, AF data)
+      - canon: libraw_canon_makernotes_t (color data, metering, flash, drive, sensor info)
+      - nikon: libraw_nikon_makernotes_t (D-Lighting, flash, NEF compression, picture control, angles)
+      - sony: libraw_sony_info_t (AF info, HDR, noise reduction, pixel shift, file format)
+      - fuji: libraw_fuji_info_t (dynamic range, film mode, focus settings, shutter type)
+      - olympus: libraw_olympus_makernotes_t (focus mode, AF areas, LiveND, panorama)
+      - hasselblad: libraw_hasselblad_makernotes_t (sensor info, capture sequence)
+      - panasonic: libraw_panasonic_makernotes_t (compression, black levels, gamma)
+      - pentax: libraw_pentax_makernotes_t (AF points, focus position)
+      - phaseone: libraw_p1_makernotes_t (software, system info)
+      - ricoh: libraw_ricoh_makernotes_t (AF area, sensor dimensions, ND filter)
+      - samsung: libraw_samsung_makernotes_t (image size, color space)
+      - kodak: libraw_kodak_makernotes_t (black levels, ISO calibration)
+  → Legacy flat fields preserved for backward compatibility (make, model, lens_make, etc.)
   → GPS: has_gps, gps_lat_deg/min/sec, gps_lat_ref, gps_lon_deg/min/sec, gps_lon_ref,
          gps_altitude, gps_alt_ref, gps_time_hour/min/sec
-```
 
 ### EXIF/Metadata Overlay
 
