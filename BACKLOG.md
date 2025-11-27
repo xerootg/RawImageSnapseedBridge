@@ -3,10 +3,10 @@
 ### conversion
 *) ensure tab navigation does not end active conversions
 *) the filename under each thumbnail while convering should reflect the new filename not the old one. so not img.nef but img.jpeg or img.dng
+*) persisted setting to adjust concurrency while converting from 1 to number of cores
 
 ## unsorted
 *) raw format picker arrow does not match style, and if it does, its ugly and should be replaced
-*) convert view does not navigate to jpeg after converting to jpeg
 *) all possible raw metadata from libraw_data_t should be rendered in the advanced exif viewer for raw files, including manufacture notes, common and manufacturer specific.
 *) I see there's AF info, please render a green box on the convert preview where the af location was if the data is available - libraw_afinfo_item_t, in libraw_metadata_common_t, part of makernotes.
 *) converted DNG thumbnails are not rotated correctly.

@@ -132,8 +132,11 @@ class MainActivity : AppCompatActivity() {
     }
     
     fun navigateToGallery(filterFormat: OutputFormat) {
-        galleryFragment?.setFilter(filterFormat)
         binding.viewPager.currentItem = 1
+        // Use post to ensure the fragment is fully visible before setting filter
+        binding.viewPager.post {
+            galleryFragment?.setFilter(filterFormat)
+        }
     }
     
     /**
