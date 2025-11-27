@@ -132,6 +132,10 @@ class GalleryFragment : Fragment() {
             openSelectedImages()
         }
         
+        binding.previewSelectedButton.setOnClickListener {
+            previewSelectedImages()
+        }
+        
         // Setup filter chips
         setupFilterChips()
     }
@@ -139,9 +143,60 @@ class GalleryFragment : Fragment() {
     private fun updateSelectionUI(count: Int) {
         if (count > 0) {
             binding.openSelectedButton.text = getString(R.string.open_selected, count)
-            binding.openSelectedButton.visibility = View.VISIBLE
+            binding.selectionButtonsContainer.visibility = View.VISIBLE
         } else {
-            binding.openSelectedButton.visibility = View.GONE
+            binding.selectionButtonsContainer.visibility = View.GONE
+        }
+    }
+    
+    private var currentPreviewDialog: ImagePreviewDialog? = null
+    
+    private fun previewSelectedImages() {
+        val allItems = adapter.getAllItems()
+        val selectedItems = adapter.getSelectedItems()
+        if (selectedItems.isEmpty() || allItems.isEmpty()) return
+        
+        // Find the position of the first selected item
+        val firstSelectedUri = selectedItems.first().uri
+        val initialPosition = allItems.indexOfFirst { it.uri == firstSelectedUri }.coerceAtLeast(0)
+        
+        // Build URIs, filenames, and file types for all items
+        val uris = ArrayList(allItems.map { it.uri })
+        val fileNames = ArrayList(allItems.map { it.name })
+        val selectedUris = ArrayList(selectedItems.map { it.uri })
+        val fileTypes = ArrayList(allItems.map { item ->
+            val ext = item.name.substringAfterLast('.', "").uppercase()
+            when (ext) {
+                "DNG" -> "DNG"
+                "JPG", "JPEG" -> "JPEG"
+                else -> ext
+            }
+        })
+        
+        // Create preview dialog in gallery mode
+        val dialog = ImagePreviewDialog.newInstance(
+            uris = uris,
+            fileNames = fileNames,
+            initialPosition = initialPosition,
+            selectedUris = selectedUris,
+            dngStatus = arrayListOf(),  // Not needed for gallery mode
+            jpegStatus = arrayListOf(),  // Not needed for gallery mode
+            fileTypes = fileTypes,
+            mode = PreviewMode.GALLERY_VIEW
+        )
+        currentPreviewDialog = dialog
+        
+        dialog.show(childFragmentManager, "gallery_preview")
+        
+        // Use fragment lifecycle to detect when dialog is dismissed
+        childFragmentManager.executePendingTransactions()
+        dialog.dialog?.setOnDismissListener {
+            // Sync selection state from dialog back to adapter
+            currentPreviewDialog?.let { previewDialog ->
+                val finalSelection = previewDialog.getSelectedUris()
+                adapter.setSelectionFromUris(finalSelection)
+            }
+            currentPreviewDialog = null
         }
     }
     

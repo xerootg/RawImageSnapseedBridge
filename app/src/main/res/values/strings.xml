@@ -30,6 +30,8 @@
     <string name="gallery_file_count">%1$d images in Raw2DNG</string>
     <string name="open_with">Open with…</string>
     <string name="open_selected">Open %1$d in…</string>
+    <string name="preview_selected">Preview</string>
+    <string name="open_with_button">Open with…</string>
     
     <!-- RAW File Picker -->
     <string name="raw_file_thumbnail">RAW file thumbnail</string>

@@ -70,8 +70,19 @@ MainActivity
     ├── Grid view of converted images
     ├── Filter chips (DNG / JPEG / All)
     ├── Multi-select with long-press
+    ├── Preview button (multi-select mode)
     ├── Clear folder (filter-specific)
     └── Open in external app
+
+ImagePreviewDialog (shared)
+├── ViewPager2 for image swiping
+├── Thumbnail strip (gutter) with:
+│   ├── RAW mode: D/J conversion badges
+│   └── Gallery mode: Green selection checkmarks
+├── Selection toggle button
+├── Zoom controls
+├── RAW mode: Convert buttons (JPEG/DNG)
+└── Gallery mode: Open with button
 ```
 
 ### Package Structure
@@ -92,6 +103,8 @@ com.raw2dng/
 ├── ConversionQueue.kt        # Manages parallel conversion jobs with configurable parallelism
 ├── ConversionThumbnailAdapter.kt # Adapter for conversion progress thumbnails
 ├── ConvertedFilesHelper.kt   # Checks conversion status by file existence
+├── OutputFormat.kt           # Enum: DNG, JPEG
+├── PreviewMode.kt            # Enum: RAW_CONVERSION, GALLERY_VIEW (in ImagePreviewDialog.kt)
 ├── OutputFormat.kt           # Enum: DNG, JPEG
 │
 ├── ThumbnailCache.kt         # LRU cache for RAW thumbnails extracted via LibRaw
@@ -245,15 +258,35 @@ Gallery Deletion:
 ```
 ImagePreviewDialog
   → Fullscreen image preview with ViewPager2
+  → PreviewMode enum determines UI:
+    - RAW_CONVERSION: Shows JPEG/DNG convert buttons
+    - GALLERY_VIEW: Shows "Open with" button
   → Thumbnail strip (gutter) at bottom shows all images
   → ThumbnailStripAdapter displays ThumbnailStripItem:
     - uri: Image URI
-    - isConvertedToDng: Shows "D" badge
-    - isConvertedToJpeg: Shows "J" badge
-    - Both: Shows "D/J" badge
+    - isConvertedToDng: Shows "D" badge (RAW mode)
+    - isConvertedToJpeg: Shows "J" badge (RAW mode)
+    - isSelected: Shows green checkmark (Gallery mode)
   → Badge styling: 14sp bold text, green on dark background, white shadow border
-  → Selection border highlights current image
-  → JPEG/DNG convert buttons with selection count
+  → Selection border highlights current viewing position
+  → Long-press on thumbnail toggles selection (Gallery mode)
+  → Selection syncs back to GalleryAdapter on dialog dismiss
+```
+
+### Gallery Preview Flow
+
+```
+GalleryFragment.previewSelectedImages()
+  → Collects all gallery items and selected URIs
+  → Opens ImagePreviewDialog with PreviewMode.GALLERY_VIEW
+  → Dialog shows all images, navigates to first selected
+  → Thumbnail strip shows green checkmarks on selected items
+  → User can:
+    - Swipe to navigate between images
+    - Tap checkbox button to toggle current image selection
+    - Long-press thumbnail to toggle that image's selection
+    - Tap "Open with" to send selected images to external app
+  → On dismiss, selection state syncs back to GalleryAdapter
 ```
 
 ### Output Directories
@@ -273,8 +306,9 @@ ImagePreviewDialog
 4. **Camera Color Matrices**: Applies camera-specific color matrices for accurate colors
 5. **Filter-Specific Clear**: Gallery clear button respects current filter (DNG/JPEG/All)
 6. **Multi-Select**: Long-press enables multi-select for batch operations
-7. **Parallel Conversion**: ConversionQueue processes files in parallel with configurable parallelism (default: 2)
-8. **Conversion Progress Grid**: Visual thumbnail grid showing per-file conversion status
+7. **Gallery Preview**: Preview button in multi-select mode opens fullscreen preview with selection management
+8. **Parallel Conversion**: ConversionQueue processes files in parallel with configurable parallelism (default: 2)
+9. **Conversion Progress Grid**: Visual thumbnail grid showing per-file conversion status
 9. **Overwrite Confirmation**: Previously converted files require tap to confirm before re-conversion
 10. **Real-time Status Updates**: Conversion badges update immediately after conversion/deletion
 11. **Preview Conversion Badges**: Thumbnail strip shows D/J/D+J badges per image
@@ -343,6 +377,11 @@ When making changes, verify:
 - [ ] Done button disabled until all confirmations resolved or converted
 - [ ] Parallel conversion of multiple files produces non-corrupt output
 - [ ] Changing gallery filter clears any active selection
+- [ ] Gallery preview button opens fullscreen preview
+- [ ] Gallery preview shows checkmarks on selected items
+- [ ] Toggle selection from gallery preview updates adapter on dismiss
+- [ ] Long-press thumbnail in gallery preview toggles selection
+- [ ] "Open with" button in gallery preview works
 
 ### Common Issues
 

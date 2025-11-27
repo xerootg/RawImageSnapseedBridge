@@ -18,26 +18,33 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * Data class for thumbnail strip items with conversion status
+ * Data class for thumbnail strip items with conversion and selection status
  */
 data class ThumbnailStripItem(
     val uri: Uri,
-    val isConvertedToDng: Boolean,
-    val isConvertedToJpeg: Boolean
+    val isConvertedToDng: Boolean = false,
+    val isConvertedToJpeg: Boolean = false,
+    val isSelected: Boolean = false,
+    val fileType: String? = null  // "DNG", "JPEG", etc. for gallery mode
 )
 
 class ThumbnailStripAdapter(
-    private val onThumbnailClick: (Int) -> Unit
+    private val onThumbnailClick: (Int) -> Unit,
+    private val onSelectionToggle: ((Int) -> Unit)? = null
 ) : ListAdapter<ThumbnailStripItem, ThumbnailStripAdapter.ViewHolder>(ThumbnailStripDiffCallback()) {
 
     private var selectedPosition: Int = 0
     private val thumbnailJobs = mutableMapOf<Int, Job>()
+    private var showSelectionCheckmarks: Boolean = false
+    private var showFileTypeBadge: Boolean = false
 
     class ViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         val thumbnail: ImageView = itemView.findViewById(R.id.thumbnail)
         val selectionBorder: View = itemView.findViewById(R.id.selectionBorder)
         val container: View = itemView.findViewById(R.id.thumbnailContainer)
         val conversionBadge: TextView = itemView.findViewById(R.id.conversionBadge)
+        val selectionCheckmark: ImageView = itemView.findViewById(R.id.selectionCheckmark)
+        val fileTypeBadge: TextView = itemView.findViewById(R.id.fileTypeBadge)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -48,7 +55,7 @@ class ThumbnailStripAdapter(
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val item = getItem(position)
-        val isSelected = position == selectedPosition
+        val isCurrentPosition = position == selectedPosition
 
         // Cancel any existing loading job for this position
         thumbnailJobs[position]?.cancel()
@@ -56,26 +63,41 @@ class ThumbnailStripAdapter(
         // Reset thumbnail
         holder.thumbnail.setImageResource(R.drawable.ic_raw_file)
 
-        // Show/hide selection border
-        holder.selectionBorder.visibility = if (isSelected) View.VISIBLE else View.GONE
+        // Show/hide selection border (current viewing position)
+        holder.selectionBorder.visibility = if (isCurrentPosition) View.VISIBLE else View.GONE
 
-        // Show conversion badge
-        when {
-            item.isConvertedToDng && item.isConvertedToJpeg -> {
-                holder.conversionBadge.text = "D/J"
-                holder.conversionBadge.visibility = View.VISIBLE
+        // Show selection checkmark (for gallery mode selection)
+        holder.selectionCheckmark.visibility = if (showSelectionCheckmarks && item.isSelected) View.VISIBLE else View.GONE
+
+        // Show file type badge (for gallery mode - DNG/JPEG)
+        if (showFileTypeBadge && item.fileType != null) {
+            holder.fileTypeBadge.text = item.fileType
+            holder.fileTypeBadge.visibility = View.VISIBLE
+        } else {
+            holder.fileTypeBadge.visibility = View.GONE
+        }
+
+        // Show conversion badge (for RAW mode conversion status)
+        if (!showSelectionCheckmarks) {
+            when {
+                item.isConvertedToDng && item.isConvertedToJpeg -> {
+                    holder.conversionBadge.text = "D/J"
+                    holder.conversionBadge.visibility = View.VISIBLE
+                }
+                item.isConvertedToDng -> {
+                    holder.conversionBadge.text = "D"
+                    holder.conversionBadge.visibility = View.VISIBLE
+                }
+                item.isConvertedToJpeg -> {
+                    holder.conversionBadge.text = "J"
+                    holder.conversionBadge.visibility = View.VISIBLE
+                }
+                else -> {
+                    holder.conversionBadge.visibility = View.GONE
+                }
             }
-            item.isConvertedToDng -> {
-                holder.conversionBadge.text = "D"
-                holder.conversionBadge.visibility = View.VISIBLE
-            }
-            item.isConvertedToJpeg -> {
-                holder.conversionBadge.text = "J"
-                holder.conversionBadge.visibility = View.VISIBLE
-            }
-            else -> {
-                holder.conversionBadge.visibility = View.GONE
-            }
+        } else {
+            holder.conversionBadge.visibility = View.GONE
         }
 
         // Load thumbnail asynchronously
@@ -117,6 +139,17 @@ class ThumbnailStripAdapter(
                 onThumbnailClick(clickedPosition)
             }
         }
+
+        // Long-press listener for selection toggle (gallery mode)
+        holder.container.setOnLongClickListener {
+            val clickedPosition = holder.bindingAdapterPosition
+            if (clickedPosition != RecyclerView.NO_POSITION && onSelectionToggle != null) {
+                onSelectionToggle.invoke(clickedPosition)
+                true
+            } else {
+                false
+            }
+        }
     }
 
     override fun onViewRecycled(holder: ViewHolder) {
@@ -138,6 +171,44 @@ class ThumbnailStripAdapter(
     }
 
     fun getSelectedPosition(): Int = selectedPosition
+
+    /**
+     * Enable/disable showing selection checkmarks on items.
+     * When enabled, shows green checkmarks on items where isSelected=true.
+     * When disabled, shows conversion badges (D/J) instead.
+     */
+    fun setShowSelectionCheckmarks(show: Boolean) {
+        if (showSelectionCheckmarks != show) {
+            showSelectionCheckmarks = show
+            notifyDataSetChanged()
+        }
+    }
+
+    /**
+     * Enable/disable showing file type badges (DNG/JPEG) on items.
+     * Used in gallery mode to indicate file type.
+     */
+    fun setShowFileTypeBadge(show: Boolean) {
+        if (showFileTypeBadge != show) {
+            showFileTypeBadge = show
+            notifyDataSetChanged()
+        }
+    }
+
+    /**
+     * Update the selection state of an item at the given position.
+     */
+    fun updateItemSelection(position: Int, isSelected: Boolean) {
+        if (position in 0 until itemCount) {
+            val item = getItem(position)
+            if (item.isSelected != isSelected) {
+                val newItem = item.copy(isSelected = isSelected)
+                val newList = currentList.toMutableList()
+                newList[position] = newItem
+                submitList(newList)
+            }
+        }
+    }
 
     class ThumbnailStripDiffCallback : DiffUtil.ItemCallback<ThumbnailStripItem>() {
         override fun areItemsTheSame(oldItem: ThumbnailStripItem, newItem: ThumbnailStripItem): Boolean {

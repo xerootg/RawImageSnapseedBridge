@@ -1,5 +1,6 @@
 package com.raw2dng
 
+import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -9,10 +10,19 @@ import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.ImageButton
 import android.widget.TextView
+import android.widget.Toast
 import androidx.fragment.app.DialogFragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.widget.ViewPager2
+
+/**
+ * Preview mode determines which UI elements are shown
+ */
+enum class PreviewMode {
+    RAW_CONVERSION,  // Shows convert buttons (JPEG/DNG), for RAW file picker
+    GALLERY_VIEW     // Shows "Open with" button, for gallery preview
+}
 
 class ImagePreviewDialog : DialogFragment() {
 
@@ -24,14 +34,21 @@ class ImagePreviewDialog : DialogFragment() {
         fun onConvertRequested(format: OutputFormat)
     }
 
+    interface OnOpenWithRequestedListener {
+        fun onOpenWithRequested(uris: List<Uri>)
+    }
+
     private var imageUris: ArrayList<Uri> = arrayListOf()
     private var fileNames: ArrayList<String> = arrayListOf()
     private var dngStatus: ArrayList<Boolean> = arrayListOf()
     private var jpegStatus: ArrayList<Boolean> = arrayListOf()
+    private var fileTypes: ArrayList<String> = arrayListOf()
     private var selectedUris: HashSet<Uri> = hashSetOf()
     private var currentPosition: Int = 0
+    private var previewMode: PreviewMode = PreviewMode.RAW_CONVERSION
     private var selectionChangeListener: OnSelectionChangeListener? = null
     private var convertRequestedListener: OnConvertRequestedListener? = null
+    private var openWithRequestedListener: OnOpenWithRequestedListener? = null
 
     private lateinit var thumbnailStripAdapter: ThumbnailStripAdapter
     private lateinit var imagePagerAdapter: ImagePagerAdapter
@@ -44,6 +61,7 @@ class ImagePreviewDialog : DialogFragment() {
     private lateinit var btnSelectImage: ImageButton
     private lateinit var btnConvertJpeg: android.widget.Button
     private lateinit var btnConvertDng: android.widget.Button
+    private lateinit var btnOpenWith: android.widget.Button
     private lateinit var selectionCountText: TextView
 
     companion object {
@@ -53,6 +71,8 @@ class ImagePreviewDialog : DialogFragment() {
         private const val ARG_SELECTED_URIS = "selected_uris"
         private const val ARG_DNG_STATUS = "dng_status"
         private const val ARG_JPEG_STATUS = "jpeg_status"
+        private const val ARG_FILE_TYPES = "file_types"
+        private const val ARG_PREVIEW_MODE = "preview_mode"
 
         fun newInstance(
             uris: ArrayList<Uri>,
@@ -60,7 +80,9 @@ class ImagePreviewDialog : DialogFragment() {
             initialPosition: Int,
             selectedUris: ArrayList<Uri> = arrayListOf(),
             dngStatus: ArrayList<Boolean> = arrayListOf(),
-            jpegStatus: ArrayList<Boolean> = arrayListOf()
+            jpegStatus: ArrayList<Boolean> = arrayListOf(),
+            fileTypes: ArrayList<String> = arrayListOf(),
+            mode: PreviewMode = PreviewMode.RAW_CONVERSION
         ): ImagePreviewDialog {
             return ImagePreviewDialog().apply {
                 arguments = Bundle().apply {
@@ -71,6 +93,8 @@ class ImagePreviewDialog : DialogFragment() {
                     // Store boolean arrays as serializable
                     putSerializable(ARG_DNG_STATUS, dngStatus)
                     putSerializable(ARG_JPEG_STATUS, jpegStatus)
+                    putStringArrayList(ARG_FILE_TYPES, fileTypes)
+                    putString(ARG_PREVIEW_MODE, mode.name)
                 }
             }
         }
@@ -87,6 +111,10 @@ class ImagePreviewDialog : DialogFragment() {
 
     fun setOnConvertRequestedListener(listener: OnConvertRequestedListener) {
         convertRequestedListener = listener
+    }
+
+    fun setOnOpenWithRequestedListener(listener: OnOpenWithRequestedListener) {
+        openWithRequestedListener = listener
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -116,6 +144,16 @@ class ImagePreviewDialog : DialogFragment() {
             dngStatus = (it.getSerializable(ARG_DNG_STATUS) as? ArrayList<Boolean>) ?: arrayListOf()
             @Suppress("UNCHECKED_CAST")
             jpegStatus = (it.getSerializable(ARG_JPEG_STATUS) as? ArrayList<Boolean>) ?: arrayListOf()
+            
+            // Get file types
+            fileTypes = it.getStringArrayList(ARG_FILE_TYPES) ?: arrayListOf()
+            
+            // Get preview mode
+            previewMode = try {
+                PreviewMode.valueOf(it.getString(ARG_PREVIEW_MODE) ?: PreviewMode.RAW_CONVERSION.name)
+            } catch (e: IllegalArgumentException) {
+                PreviewMode.RAW_CONVERSION
+            }
         }
     }
 
@@ -197,6 +235,7 @@ class ImagePreviewDialog : DialogFragment() {
         selectionCountText = view.findViewById(R.id.selectionCountText)
         btnConvertJpeg = view.findViewById(R.id.btnConvertJpeg)
         btnConvertDng = view.findViewById(R.id.btnConvertDng)
+        btnOpenWith = view.findViewById(R.id.btnOpenWith)
         
         btnConvertJpeg.setOnClickListener {
             if (selectedUris.isNotEmpty()) {
@@ -209,6 +248,16 @@ class ImagePreviewDialog : DialogFragment() {
                 convertRequestedListener?.onConvertRequested(OutputFormat.DNG)
             }
         }
+        
+        btnOpenWith.setOnClickListener {
+            if (selectedUris.isNotEmpty()) {
+                openWithRequestedListener?.onOpenWithRequested(selectedUris.toList())
+                    ?: openWithDefaultHandler()
+            }
+        }
+        
+        // Show/hide buttons based on preview mode
+        setupModeSpecificUI()
         updateConvertButtons()
 
         // Setup thumbnail strip
@@ -220,6 +269,46 @@ class ImagePreviewDialog : DialogFragment() {
             updateUIForCurrentPosition()
         }
     }
+    
+    private fun setupModeSpecificUI() {
+        when (previewMode) {
+            PreviewMode.RAW_CONVERSION -> {
+                btnConvertJpeg.visibility = View.VISIBLE
+                btnConvertDng.visibility = View.VISIBLE
+                btnOpenWith.visibility = View.GONE
+            }
+            PreviewMode.GALLERY_VIEW -> {
+                btnConvertJpeg.visibility = View.GONE
+                btnConvertDng.visibility = View.GONE
+                btnOpenWith.visibility = View.VISIBLE
+            }
+        }
+    }
+    
+    private fun openWithDefaultHandler() {
+        val urisToOpen = selectedUris.toList()
+        if (urisToOpen.isEmpty()) return
+        
+        try {
+            val intent = if (urisToOpen.size == 1) {
+                Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(urisToOpen.first(), "image/*")
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+            } else {
+                Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+                    type = "image/*"
+                    putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(urisToOpen))
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+            }
+            
+            val chooser = Intent.createChooser(intent, getString(R.string.open_with))
+            startActivity(chooser)
+        } catch (e: Exception) {
+            Toast.makeText(requireContext(), "Failed to open images", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     private fun getCurrentZoomableImageView(): ZoomableImageView? {
         // ViewPager2 is backed by RecyclerView, get the current item's view
@@ -229,24 +318,54 @@ class ImagePreviewDialog : DialogFragment() {
     }
 
     private fun setupThumbnailStrip() {
-        thumbnailStripAdapter = ThumbnailStripAdapter { position ->
-            previewPager.setCurrentItem(position, true)
-        }
+        val selectionToggleHandler: ((Int) -> Unit)? = if (previewMode == PreviewMode.GALLERY_VIEW) {
+            { position ->
+                // Toggle selection for this item
+                val uri = imageUris.getOrNull(position)
+                if (uri != null) {
+                    val isNowSelected = if (selectedUris.contains(uri)) {
+                        selectedUris.remove(uri)
+                        false
+                    } else {
+                        selectedUris.add(uri)
+                        true
+                    }
+                    thumbnailStripAdapter.updateItemSelection(position, isNowSelected)
+                    updateConvertButtons()
+                    selectionChangeListener?.onSelectionChanged(uri, isNowSelected)
+                }
+            }
+        } else null
+        
+        thumbnailStripAdapter = ThumbnailStripAdapter(
+            onThumbnailClick = { position ->
+                previewPager.setCurrentItem(position, true)
+            },
+            onSelectionToggle = selectionToggleHandler
+        )
 
         thumbnailStrip.apply {
             layoutManager = LinearLayoutManager(requireContext(), LinearLayoutManager.HORIZONTAL, false)
             adapter = thumbnailStripAdapter
         }
 
-        // Build thumbnail strip items with conversion status
+        // Build thumbnail strip items with conversion/selection status and file type
         val thumbnailItems = imageUris.mapIndexed { index, uri ->
             ThumbnailStripItem(
                 uri = uri,
                 isConvertedToDng = dngStatus.getOrElse(index) { false },
-                isConvertedToJpeg = jpegStatus.getOrElse(index) { false }
+                isConvertedToJpeg = jpegStatus.getOrElse(index) { false },
+                isSelected = selectedUris.contains(uri),
+                fileType = fileTypes.getOrElse(index) { null }
             )
         }
         thumbnailStripAdapter.submitList(thumbnailItems)
+        
+        // Enable selection checkmarks and file type badges for gallery mode
+        if (previewMode == PreviewMode.GALLERY_VIEW) {
+            thumbnailStripAdapter.setShowSelectionCheckmarks(true)
+            thumbnailStripAdapter.setShowFileTypeBadge(true)
+        }
         
         // Set initial selection and scroll to it
         if (currentPosition > 0) {
@@ -305,6 +424,12 @@ class ImagePreviewDialog : DialogFragment() {
         
         updateSelectionButton()
         updateConvertButtons()
+        
+        // Update thumbnail strip checkmark in gallery mode
+        if (previewMode == PreviewMode.GALLERY_VIEW) {
+            thumbnailStripAdapter.updateItemSelection(currentPosition, isNowSelected)
+        }
+        
         selectionChangeListener?.onSelectionChanged(currentUri, isNowSelected)
     }
 
@@ -313,8 +438,15 @@ class ImagePreviewDialog : DialogFragment() {
         val hasSelection = count > 0
         btnConvertJpeg.isEnabled = hasSelection
         btnConvertDng.isEnabled = hasSelection
+        btnOpenWith.isEnabled = hasSelection
         selectionCountText.text = if (count > 0) count.toString() else ""
     }
+    
+    /**
+     * Get the current set of selected URIs.
+     * Useful for syncing selection state after dialog is dismissed.
+     */
+    fun getSelectedUris(): Set<Uri> = selectedUris.toSet()
 
     override fun onStart() {
         super.onStart()

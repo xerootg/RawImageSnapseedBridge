@@ -57,11 +57,29 @@ class GalleryAdapter(
     
     fun getSelectedCount(): Int = selectedIds.size
     
+    fun getAllItems(): List<GalleryItem> = currentList
+    
     fun clearSelection() {
         selectedIds.clear()
         isMultiSelectMode = false
         notifyDataSetChanged()
         onSelectionChanged(0)
+    }
+    
+    /**
+     * Update the selection state based on a set of selected URIs.
+     * Called after the preview dialog is closed to sync selection state.
+     */
+    fun setSelectionFromUris(selectedUriSet: Set<Uri>) {
+        selectedIds.clear()
+        currentList.forEach { item ->
+            if (selectedUriSet.contains(item.uri)) {
+                selectedIds.add(item.id)
+            }
+        }
+        isMultiSelectMode = selectedIds.isNotEmpty()
+        notifyDataSetChanged()
+        onSelectionChanged(selectedIds.size)
     }
     
     private fun toggleSelection(item: GalleryItem) {

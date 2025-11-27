@@ -2,12 +2,12 @@
 ## high priority
 
 ### ux
-*) in multi-select mode in gallery, previewing the selected image(s) should be possible with a button in the top bar, and in preview there should be a button a the top allowing openwith, as well as selection and de-selection of images. gutter of images should be rendered, showing selected images with a green checkmark. refactor the existing preview so it can work for both preview types
 *) material you should reflect the system theme. it is currently purple and my system theme is not purple.
 *) in the gallery, when multiselect is active, a button should be rendered to the right of "Open (count) in..." that says "Delete Selections"
 
 ### conversion workflow
 *) jpeg quality is very noisy, lets encode that at a higher quality for export versus thumbnails
+*) from the gallery tab, regenrate should be an option, and prompt the user for settings, defaulting at the app level. do not persist these values
 
 ### raw handling
 *) rotation of the input should be transfered to the dng, even if that means rotating the image in memory before writing the dng
@@ -21,6 +21,7 @@
 *) allow setting of the convert dialogue text log or thumbnail previews
 *) a button to a dialogue with all license credits
 *) allow filters on convert picker tab to de-emphasize, gray out if you will, images which have already been converted to that format
+*) the jpeg conversion factors such as quality level
 
 ### exif
 *) preview view should have a button to show exif data
