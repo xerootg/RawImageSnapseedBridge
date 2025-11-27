@@ -1,12 +1,8 @@
 # backlog
 ## high priority
 
-### ux
-*) material you should reflect the system theme. it is currently purple and my system theme is not purple.
-
 ### conversion workflow
-*) jpeg quality is very noisy, lets encode that at a higher quality for export versus thumbnails
-*) from the gallery tab, regenrate should be an option, and prompt the user for settings, defaulting at the app level. do not persist these values
+*) jpeg quality is very noisy, lets encode that at a higher quality for export and preview, versus thumbnails. this may mean needing to render previews dynamically if thats not already done
 
 ### raw handling
 *) rotation of the input should be transfered to the dng, even if that means rotating the image in memory before writing the dng
@@ -21,6 +17,9 @@
 *) a button to a dialogue with all license credits
 *) allow filters on convert picker tab to de-emphasize, gray out if you will, images which have already been converted to that format
 *) the jpeg conversion factors such as quality level
+
+### conversion workflow (depends on settings)
+*) from the gallery tab, regenrate should be an option, and prompt the user for settings, defaulting at the app level. do not persist these values
 
 ### exif
 *) preview view should have a button to show exif data
