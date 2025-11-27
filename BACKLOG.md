@@ -1,9 +1,10 @@
 # backlog
 ## high priority
 
+### bugs
+*) if something is selected in gallery tab under a filter, like jpeg, and you change filters to dng, the open in (count) button does not work until that item is in view. i'd prefer if changing filters in the gallery cleared selected items
+
 ### ux
-*) if the mediaapi is used to delete pictures, regardless of filter type, mediaapi asks permission to delete the files. do not additionally ask for permission as jpeg does now.
-*) screen rotation cancels whatever is running if converting, even if conversion is complete
 *) in multi-select mode in gallery, previewing the selected image(s) should be possible with a button in the top bar, and in preview there should be a button a the top allowing openwith, as well as selection and de-selection of images. gutter of images should be rendered, showing selected images with a green checkmark
 *) material you should reflect the system theme. it is currently purple and my system theme is not purple.
 

@@ -220,7 +220,7 @@ ImagePreviewDialog
     - isConvertedToDng: Shows "D" badge
     - isConvertedToJpeg: Shows "J" badge
     - Both: Shows "D/J" badge
-  → Green badges on dark background in bottom-right corner
+  → Badge styling: 14sp bold text, green on dark background, white shadow border
   → Selection border highlights current image
   → JPEG/DNG convert buttons with selection count
 ```
@@ -249,6 +249,7 @@ ImagePreviewDialog
 11. **Auto-Navigate to Gallery**: Optional 3-second countdown after successful conversion
 12. **Log/Thumbnail Toggle**: Switch between visual progress grid and text log during conversion
 13. **Tab Navigation Cleanup**: Conversion overlay clears when navigating away if done
+14. **Screen Rotation Handling**: State preserved via configChanges (no activity recreation)
 
 ### Color Matrix Handling
 
@@ -261,7 +262,7 @@ The app includes hardcoded color matrices for cameras not fully supported by Lib
 1. **RawFileItem.isConvertedToDng/isConvertedToJpeg** are `var` (mutable) to allow refresh
 2. **ConvertedFilesHelper** checks file existence on-demand (no caching)
 3. **GalleryAdapter** supports both click (open) and long-press (multi-select)
-4. **Android 11+ (R)** uses `MediaStore.createDeleteRequest()` for file deletion
+4. **Android 11+ (R)** uses `MediaStore.createDeleteRequest()` for file deletion (skips app confirmation, uses system dialog)
 5. **JPEG output** uses LibRaw's dcraw processing with libjpeg encoding
 6. **MainActivity** holds references to both pickerFragment and galleryFragment for cross-tab communication
 7. **ThumbnailStripItem** carries conversion status (dng/jpeg booleans) for badge display
@@ -269,6 +270,8 @@ The app includes hardcoded color matrices for cameras not fully supported by Lib
 9. **ViewPager2.OnPageChangeCallback** clears conversion overlay when switching tabs (if done)
 10. **SharedPreferences** persists: auto-navigate checkbox, log/thumbnail toggle preference
 11. **conversionCompletedSuccessfully** flag enables checkbox to trigger countdown after completion
+12. **configChanges** in manifest preserves state on screen rotation (no activity recreation)
+13. **Button styling**: All buttons use Material filled style for consistency
 
 ### Testing Checklist
 
@@ -288,6 +291,9 @@ When making changes, verify:
 - [ ] Checking auto-navigate after completion triggers countdown
 - [ ] Log/Thumbnail toggle works during and after conversion
 - [ ] Tab switch clears conversion overlay when done
+- [ ] Screen rotation preserves selections and conversion state
+- [ ] Screen rotation during conversion doesn't interrupt it
+- [ ] Preview dialog survives screen rotation
 
 ### Common Issues
 
