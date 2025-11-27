@@ -12,9 +12,10 @@
 *) add a dropdown to allow the directories to search for raws in to be overridden in the settings menu. it should be based on the current folders that current raw images were found in. this selection should be persisted, easily resettable, and apply immediately to the picker as well as preview
 *) conversion list should be filterable by exif data like camera, lens, etc
 
+### quick actions
+*) add a setting which allows single conversions to dng to auto open in snapseeed
+
 ## low priority
-*) exif overlay tap anywhere to close is broken, you have to press the x
-*) jpeg quality slider goes to 1 which is silly, cap at 80 min
 *) button style for regen/preview/open/delete is smushed and also mismatched from the rest of the UI
 *) better reprocess dialogue, maybe reuse existing conversion view
 *) playstore???

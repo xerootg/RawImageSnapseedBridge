@@ -84,8 +84,8 @@ class JpegSettingsDialog : DialogFragment() {
         
         seekQuality.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                // Ensure minimum of 1
-                val quality = maxOf(1, progress)
+                // Ensure minimum of 80
+                val quality = maxOf(80, progress)
                 txtQualityValue.text = quality.toString()
             }
             
@@ -111,7 +111,7 @@ class JpegSettingsDialog : DialogFragment() {
             // Save all settings
             val editor = prefs.edit()
             
-            val quality = maxOf(1, seekQuality.progress)
+            val quality = maxOf(80, seekQuality.progress)
             editor.putInt(KEY_JPEG_QUALITY, quality)
             
             val chroma = when (radioGroupChroma.checkedRadioButtonId) {

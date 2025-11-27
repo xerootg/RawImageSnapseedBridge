@@ -259,10 +259,14 @@ class ImagePreviewDialog : DialogFragment() {
             toggleExifOverlay()
         }
         
-        // Tap overlay to close
-        exifOverlay.setOnClickListener {
-            hideExifOverlay()
-        }
+        // Tap overlay to close - set listeners on all child views to ensure tap anywhere works
+        val closeExifListener = View.OnClickListener { hideExifOverlay() }
+        exifOverlay.setOnClickListener(closeExifListener)
+        view.findViewById<View>(R.id.exifScrollView).setOnClickListener(closeExifListener)
+        view.findViewById<View>(R.id.exifContent).setOnClickListener(closeExifListener)
+        view.findViewById<View>(R.id.exifTitle).setOnClickListener(closeExifListener)
+        view.findViewById<View>(R.id.exifText).setOnClickListener(closeExifListener)
+        view.findViewById<View>(R.id.exifTapToClose).setOnClickListener(closeExifListener)
 
         selectionCountText = view.findViewById(R.id.selectionCountText)
         btnConvertJpeg = view.findViewById(R.id.btnConvertJpeg)

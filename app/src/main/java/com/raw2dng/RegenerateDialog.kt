@@ -78,7 +78,7 @@ class RegenerateDialog : DialogFragment() {
         // Quality SeekBar listener
         seekQuality.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                val quality = maxOf(1, progress)
+                val quality = maxOf(80, progress)
                 txtQualityValue.text = quality.toString()
             }
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
@@ -112,7 +112,7 @@ class RegenerateDialog : DialogFragment() {
                 OutputFormat.JPEG
             }
             
-            val quality = maxOf(1, seekQuality.progress)
+            val quality = maxOf(80, seekQuality.progress)
             
             val chroma = when (radioGroupChroma.checkedRadioButtonId) {
                 R.id.radioChroma444 -> DNGConverter.CHROMA_SUBSAMPLING_444

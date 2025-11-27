@@ -103,7 +103,7 @@
     <string name="jpeg_settings_label">JPEG conversion defaults</string>
     <string name="jpeg_settings_button">Configure JPEG settings…</string>
     <string name="jpeg_settings_title">JPEG Settings</string>
-    <string name="jpeg_quality_label">Quality (1–100)</string>
+    <string name="jpeg_quality_label">Quality (80–100%%)</string>
     <string name="jpeg_quality_hint">Higher values = better quality, larger file size</string>
     <string name="jpeg_chroma_label">Chroma subsampling</string>
     <string name="chroma_444">4:4:4 — Best quality (no subsampling)</string>

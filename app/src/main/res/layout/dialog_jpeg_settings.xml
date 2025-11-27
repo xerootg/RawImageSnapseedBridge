@@ -32,7 +32,7 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:min="1"
+            android:min="80"
             android:max="100"
             android:progress="95" />
 
