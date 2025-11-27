@@ -135,7 +135,6 @@ com.raw2dng/
 ├── ConvertedFilesHelper.kt   # Checks conversion status by file existence
 ├── OutputFormat.kt           # Enum: DNG, JPEG
 ├── PreviewMode.kt            # Enum: RAW_CONVERSION, GALLERY_VIEW (in ImagePreviewDialog.kt)
-├── OutputFormat.kt           # Enum: DNG, JPEG
 │
 ├── ThumbnailCache.kt         # LRU cache for RAW thumbnails extracted via LibRaw
 ├── ThumbnailStripAdapter.kt  # Horizontal thumbnail strip in preview dialog
@@ -144,6 +143,7 @@ com.raw2dng/
 ├── ImagePreviewDialog.kt     # Fullscreen preview dialog with selection
 ├── ImagePagerAdapter.kt      # ViewPager2 adapter for preview images
 ├── SettingsFragment.kt       # Settings tab with all app preferences (auto-save)
+├── RawTypesDialogFragment.kt # Hierarchical RAW format selection dialog
 ├── JpegSettingsDialog.kt     # JPEG conversion settings (quality, chroma, optimize)
 ├── LicensesDialog.kt         # Open source licenses display
 ├── RegenerateDialog.kt       # Regeneration settings dialog (one-time settings)
@@ -457,11 +457,16 @@ SettingsFragment.kt (Tab: Settings)
 │   ├── 0 seconds shows warning (orange text)
 │   └── Auto-saved via KEY_AUTONAV_TIMEOUT
 │
-├── Enabled RAW File Types
-│   ├── Multi-choice dialog selection
-│   ├── 20 formats: cr2, cr3, nef, nrw, arw, srf, sr2, orf, pef,
-│   │   rw2, 3fr, iiq, dcr, k25, kdc, erf, mef, mos, raf, dng
-│   ├── Warning if none selected
+├── Enabled RAW File Types (button → RawTypesDialogFragment)
+│   ├── ExpandableListView organized by manufacturer
+│   ├── Manufacturers: Canon, Nikon, Sony, Fujifilm, Olympus/OM System,
+│   │   Panasonic/Lumix, Pentax, Samsung, Hasselblad, Phase One/Leaf,
+│   │   Kodak, Epson, Mamiya
+│   ├── 19 formats across all manufacturers (no DNG - output format)
+│   ├── Manufacturer group checkbox toggles all child formats
+│   ├── Group shows X/Y count of selected formats
+│   ├── Done button requires at least one selection
+│   ├── Select All / Clear All buttons
 │   └── Auto-saved via KEY_ENABLED_RAW_TYPES (StringSet)
 │
 ├── Hide Already Converted Images (checkbox)
@@ -490,6 +495,17 @@ SettingsFragment.kt (Tab: Settings)
     ├── cJSON (MIT license)
     ├── Independent JPEG Group (IJG license)
     └── Android/Kotlin Libraries (Apache 2.0)
+
+RawTypesDialogFragment.kt
+├── MANUFACTURERS: LinkedHashMap<String, List<String>>
+│   Maps manufacturer display names to extension lists
+├── getAllExtensions(): Array<String>
+│   Flattens all manufacturer extensions for preferences compatibility
+├── ManufacturerExpandableListAdapter
+│   Custom adapter for expandable list with checkboxes
+├── Group header: Manufacturer name + checkbox + X/Y count + expand indicator
+├── Child items: Format extension checkbox (e.g., CR2, NEF)
+└── Layouts: dialog_raw_types.xml, item_manufacturer_group.xml, item_format_child.xml
 
 SharedPreferences Keys:
   PREFS_NAME = "raw2dng_prefs"
@@ -685,6 +701,9 @@ When making changes, verify:
 - [ ] "Open with" button in gallery preview works
 - [ ] Settings dialog opens from gear icon in both tabs
 - [ ] Auto-navigate timeout setting persists across app restarts
+- [ ] RAW type selection dialog shows manufacturers as expandable groups
+- [ ] Clicking manufacturer checkbox toggles all child format checkboxes
+- [ ] RAW type selection shows X/Y count per manufacturer group
 - [ ] RAW type selection persists and filters file list correctly
 - [ ] Disabling all RAW types shows warning and prevents save
 - [ ] Changing RAW types refreshes file list on dialog dismiss

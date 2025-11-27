@@ -11,7 +11,6 @@ import android.widget.SeekBar
 import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
 
 /**
  * Settings fragment for app configuration.
@@ -28,12 +27,10 @@ class SettingsFragment : Fragment() {
         const val DEFAULT_TIMEOUT = 3
         const val SNAPSEED_PACKAGE = "com.niksoftware.snapseed"
         
-        // All supported RAW extensions (sorted alphabetically for display)
+        // All supported RAW extensions - sourced from RawTypesDialogFragment.MANUFACTURERS
         // Note: DNG is NOT included - it's an output format, not an input format
-        val ALL_RAW_EXTENSIONS = arrayOf(
-            "3fr", "arw", "cr2", "cr3", "dcr", "erf", "iiq", "k25", "kdc",
-            "mef", "mos", "nef", "nrw", "orf", "pef", "raf", "rw2", "sr2", "srf"
-        )
+        val ALL_RAW_EXTENSIONS: Array<String>
+            get() = RawTypesDialogFragment.getAllExtensions()
         
         fun newInstance(): SettingsFragment {
             return SettingsFragment()
@@ -227,66 +224,16 @@ class SettingsFragment : Fragment() {
     }
     
     private fun showRawTypesDialog() {
-        // Create uppercase labels for display
-        val displayLabels = ALL_RAW_EXTENSIONS.map { it.uppercase() }.toTypedArray()
-        
-        val dialog = MaterialAlertDialogBuilder(requireContext())
-            .setTitle(R.string.raw_types_dialog_title)
-            .setMultiChoiceItems(displayLabels, selectedTypes) { _, which, isChecked ->
-                selectedTypes[which] = isChecked
+        val dialog = RawTypesDialogFragment.newInstance()
+        dialog.onSelectionConfirmed = { selectedExtensions ->
+            // Update selection state from the dialog result
+            for (i in ALL_RAW_EXTENSIONS.indices) {
+                selectedTypes[i] = selectedExtensions.contains(ALL_RAW_EXTENSIONS[i])
             }
-            .setPositiveButton(R.string.done, null) // Set to null, we'll override below
-            .setNeutralButton(R.string.select_all, null) // Set to null, we'll override below
-            .setNegativeButton(R.string.clear_all, null) // Set to null, we'll override below
-            .create()
-        
-        dialog.setOnShowListener {
-            // Override Done button to require at least one selection
-            dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-                if (selectedTypes.none { it }) {
-                    android.widget.Toast.makeText(
-                        requireContext(),
-                        R.string.raw_types_select_one,
-                        android.widget.Toast.LENGTH_SHORT
-                    ).show()
-                } else {
-                    updateRawTypesButtonText()
-                    saveSettings()
-                    notifySettingsChanged()
-                    dialog.dismiss()
-                }
-            }
-            
-            // Override Select All button
-            dialog.getButton(android.app.AlertDialog.BUTTON_NEUTRAL).setOnClickListener {
-                for (i in selectedTypes.indices) {
-                    selectedTypes[i] = true
-                }
-                // Update the checkboxes in the dialog
-                val listView = dialog.listView
-                for (i in selectedTypes.indices) {
-                    listView.setItemChecked(i, true)
-                }
-                updateRawTypesButtonText()
-                saveSettings()
-                notifySettingsChanged()
-                dialog.dismiss()
-            }
-            
-            // Override Clear All button - don't dismiss, just clear selections
-            dialog.getButton(android.app.AlertDialog.BUTTON_NEGATIVE).setOnClickListener {
-                for (i in selectedTypes.indices) {
-                    selectedTypes[i] = false
-                }
-                // Update the checkboxes in the dialog
-                val listView = dialog.listView
-                for (i in selectedTypes.indices) {
-                    listView.setItemChecked(i, false)
-                }
-                updateRawTypesButtonText()
-            }
+            updateRawTypesButtonText()
+            saveSettings()
+            notifySettingsChanged()
         }
-        
-        dialog.show()
+        dialog.show(childFragmentManager, RawTypesDialogFragment.TAG)
     }
 }
