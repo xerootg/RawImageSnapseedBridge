@@ -9,6 +9,7 @@
 *) add a setting which allows single conversions to dng to auto open in snapseeed
 
 ## low priority
+*) I see there's AF info, please render a green box on the convert preview where the af location was if the data is available - libraw_afinfo_item_t, in libraw_metadata_common_t, part of makernotes.
 *) overwrite does not overwrite - it adds a file with the same name. delete the old file first.
 *) converted DNG thumbnails are not rotated correctly.
 *) button style for regen/preview/open/delete is smushed and also mismatched from the rest of the UI

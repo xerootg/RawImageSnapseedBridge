@@ -10,6 +10,7 @@
 
 extern "C" {
 #include "jpeglib/jpeglib.h"
+#include "cJSON.h"
 }
 
 #define LOG_TAG "LibRawReader"
@@ -620,32 +621,6 @@ bool LibRawReader::convertToJPEG(const std::string& inputPath,
     return convertToJPEG(inputPath, outputPath, settings, errorMessage);
 }
 
-// Helper to escape JSON strings
-static std::string escapeJson(const std::string& s) {
-    std::string result;
-    result.reserve(s.size() + 16);
-    for (char c : s) {
-        switch (c) {
-            case '"': result += "\\\""; break;
-            case '\\': result += "\\\\"; break;
-            case '\b': result += "\\b"; break;
-            case '\f': result += "\\f"; break;
-            case '\n': result += "\\n"; break;
-            case '\r': result += "\\r"; break;
-            case '\t': result += "\\t"; break;
-            default:
-                if (c >= 0 && c < 32) {
-                    char buf[8];
-                    snprintf(buf, sizeof(buf), "\\u%04x", (unsigned char)c);
-                    result += buf;
-                } else {
-                    result += c;
-                }
-        }
-    }
-    return result;
-}
-
 // Extract metadata from RAW file as JSON
 bool LibRawReader::extractMetadataJson(const std::string& inputPath,
                                        std::string& jsonOutput,
@@ -685,129 +660,111 @@ bool LibRawReader::extractMetadataJson(const std::string& inputPath,
         }
     }
     
-    // Build JSON using string stream for cleaner construction
-    std::string json = "{";
+    // Build JSON using cJSON
+    cJSON* root = cJSON_CreateObject();
+    if (!root) {
+        errorMessage = "Failed to create JSON object";
+        return false;
+    }
     
     // Camera info
-    json += "\"make\":\"" + escapeJson(idata.make) + "\",";
-    json += "\"model\":\"" + escapeJson(idata.model) + "\",";
-    json += "\"software\":\"" + escapeJson(idata.software) + "\",";
+    cJSON_AddStringToObject(root, "make", idata.make);
+    cJSON_AddStringToObject(root, "model", idata.model);
+    cJSON_AddStringToObject(root, "software", idata.software);
     
     // Lens info
-    json += "\"lens_make\":\"" + escapeJson(lens.LensMake) + "\",";
-    json += "\"lens_model\":\"" + escapeJson(lens.Lens) + "\",";
-    json += "\"lens_serial\":\"" + escapeJson(lens.LensSerial) + "\",";
-    
-    char numBuf[128];
+    cJSON_AddStringToObject(root, "lens_make", lens.LensMake);
+    cJSON_AddStringToObject(root, "lens_model", lens.Lens);
+    cJSON_AddStringToObject(root, "lens_serial", lens.LensSerial);
     
     // Focal lengths
-    snprintf(numBuf, sizeof(numBuf), "%.1f", other.focal_len);
-    json += "\"focal_length\":" + std::string(numBuf) + ",";
-    snprintf(numBuf, sizeof(numBuf), "%.1f", lens.MinFocal);
-    json += "\"min_focal\":" + std::string(numBuf) + ",";
-    snprintf(numBuf, sizeof(numBuf), "%.1f", lens.MaxFocal);
-    json += "\"max_focal\":" + std::string(numBuf) + ",";
-    // FocalLengthIn35mmFormat is a ushort, not float
-    snprintf(numBuf, sizeof(numBuf), "%u", (unsigned int)lens.FocalLengthIn35mmFormat);
-    json += "\"focal_length_35mm\":" + std::string(numBuf) + ",";
+    cJSON_AddNumberToObject(root, "focal_length", other.focal_len);
+    cJSON_AddNumberToObject(root, "min_focal", lens.MinFocal);
+    cJSON_AddNumberToObject(root, "max_focal", lens.MaxFocal);
+    cJSON_AddNumberToObject(root, "focal_length_35mm", lens.FocalLengthIn35mmFormat);
     
     // Exposure info
-    snprintf(numBuf, sizeof(numBuf), "%.1f", other.aperture);
-    json += "\"aperture\":" + std::string(numBuf) + ",";
-    json += "\"shutter\":\"" + std::string(shutterStr) + "\",";
-    snprintf(numBuf, sizeof(numBuf), "%.6f", other.shutter);
-    json += "\"shutter_raw\":" + std::string(numBuf) + ",";
-    snprintf(numBuf, sizeof(numBuf), "%.0f", other.iso_speed);
-    json += "\"iso\":" + std::string(numBuf) + ",";
+    cJSON_AddNumberToObject(root, "aperture", other.aperture);
+    cJSON_AddStringToObject(root, "shutter", shutterStr);
+    cJSON_AddNumberToObject(root, "shutter_raw", other.shutter);
+    cJSON_AddNumberToObject(root, "iso", other.iso_speed);
     
     // Shooting info
-    snprintf(numBuf, sizeof(numBuf), "%d", shootinginfo.ExposureProgram);
-    json += "\"exposure_program\":" + std::string(numBuf) + ",";
-    snprintf(numBuf, sizeof(numBuf), "%d", shootinginfo.MeteringMode);
-    json += "\"metering_mode\":" + std::string(numBuf) + ",";
+    cJSON_AddNumberToObject(root, "exposure_program", shootinginfo.ExposureProgram);
+    cJSON_AddNumberToObject(root, "metering_mode", shootinginfo.MeteringMode);
     
     // Description and artist
-    json += "\"description\":\"" + escapeJson(other.desc) + "\",";
-    json += "\"artist\":\"" + escapeJson(other.artist) + "\",";
+    cJSON_AddStringToObject(root, "description", other.desc);
+    cJSON_AddStringToObject(root, "artist", other.artist);
     
     // Body serial
-    json += "\"body_serial\":\"" + escapeJson(shootinginfo.BodySerial) + "\",";
+    cJSON_AddStringToObject(root, "body_serial", shootinginfo.BodySerial);
     
     // Timestamp
-    json += "\"timestamp\":\"" + std::string(dateStr) + "\",";
-    snprintf(numBuf, sizeof(numBuf), "%ld", (long)other.timestamp);
-    json += "\"timestamp_raw\":" + std::string(numBuf) + ",";
+    cJSON_AddStringToObject(root, "timestamp", dateStr);
+    cJSON_AddNumberToObject(root, "timestamp_raw", (double)other.timestamp);
     
     // Dimensions
-    snprintf(numBuf, sizeof(numBuf), "%d", sizes.width);
-    json += "\"width\":" + std::string(numBuf) + ",";
-    snprintf(numBuf, sizeof(numBuf), "%d", sizes.height);
-    json += "\"height\":" + std::string(numBuf) + ",";
-    snprintf(numBuf, sizeof(numBuf), "%d", sizes.raw_width);
-    json += "\"raw_width\":" + std::string(numBuf) + ",";
-    snprintf(numBuf, sizeof(numBuf), "%d", sizes.raw_height);
-    json += "\"raw_height\":" + std::string(numBuf) + ",";
-    snprintf(numBuf, sizeof(numBuf), "%d", sizes.flip);
-    json += "\"orientation\":" + std::string(numBuf) + ",";
+    cJSON_AddNumberToObject(root, "width", sizes.width);
+    cJSON_AddNumberToObject(root, "height", sizes.height);
+    cJSON_AddNumberToObject(root, "raw_width", sizes.raw_width);
+    cJSON_AddNumberToObject(root, "raw_height", sizes.raw_height);
+    cJSON_AddNumberToObject(root, "orientation", sizes.flip);
     
     // Color info
-    snprintf(numBuf, sizeof(numBuf), "%d", idata.colors);
-    json += "\"colors\":" + std::string(numBuf) + ",";
-    json += "\"bayer_pattern\":\"" + escapeJson(idata.cdesc) + "\",";
+    cJSON_AddNumberToObject(root, "colors", idata.colors);
+    cJSON_AddStringToObject(root, "bayer_pattern", idata.cdesc);
     
     // GPS data - only include if we have actual valid GPS coordinates
-    // gpsparsed can be non-zero even if coordinates are not available
     bool hasGps = (other.parsed_gps.gpsparsed != 0);
     bool hasValidGps = hasGps && 
         (other.parsed_gps.latitude[0] != 0 || other.parsed_gps.latitude[1] != 0 || other.parsed_gps.latitude[2] != 0) &&
         (other.parsed_gps.longitude[0] != 0 || other.parsed_gps.longitude[1] != 0 || other.parsed_gps.longitude[2] != 0);
     
-    json += "\"has_gps\":" + std::string(hasValidGps ? "true" : "false");
+    cJSON_AddBoolToObject(root, "has_gps", hasValidGps);
     
     if (hasValidGps) {
-        json += ",";
         // Latitude
-        snprintf(numBuf, sizeof(numBuf), "%.6f", other.parsed_gps.latitude[0]);
-        json += "\"gps_lat_deg\":" + std::string(numBuf) + ",";
-        snprintf(numBuf, sizeof(numBuf), "%.6f", other.parsed_gps.latitude[1]);
-        json += "\"gps_lat_min\":" + std::string(numBuf) + ",";
-        snprintf(numBuf, sizeof(numBuf), "%.6f", other.parsed_gps.latitude[2]);
-        json += "\"gps_lat_sec\":" + std::string(numBuf) + ",";
-        // Handle null or empty ref chars safely - default to N if not set
-        char latRefChar = other.parsed_gps.latref;
-        if (latRefChar == 0 || (latRefChar != 'N' && latRefChar != 'S')) latRefChar = 'N';
-        json += "\"gps_lat_ref\":\"" + std::string(1, latRefChar) + "\",";
+        cJSON_AddNumberToObject(root, "gps_lat_deg", other.parsed_gps.latitude[0]);
+        cJSON_AddNumberToObject(root, "gps_lat_min", other.parsed_gps.latitude[1]);
+        cJSON_AddNumberToObject(root, "gps_lat_sec", other.parsed_gps.latitude[2]);
+        
+        // Handle null or empty ref chars safely
+        char latRefStr[2] = {other.parsed_gps.latref, '\0'};
+        if (latRefStr[0] == 0 || (latRefStr[0] != 'N' && latRefStr[0] != 'S')) latRefStr[0] = 'N';
+        cJSON_AddStringToObject(root, "gps_lat_ref", latRefStr);
         
         // Longitude
-        snprintf(numBuf, sizeof(numBuf), "%.6f", other.parsed_gps.longitude[0]);
-        json += "\"gps_lon_deg\":" + std::string(numBuf) + ",";
-        snprintf(numBuf, sizeof(numBuf), "%.6f", other.parsed_gps.longitude[1]);
-        json += "\"gps_lon_min\":" + std::string(numBuf) + ",";
-        snprintf(numBuf, sizeof(numBuf), "%.6f", other.parsed_gps.longitude[2]);
-        json += "\"gps_lon_sec\":" + std::string(numBuf) + ",";
-        // Handle null or empty ref chars safely - default to E if not set
-        char lonRefChar = other.parsed_gps.longref;
-        if (lonRefChar == 0 || (lonRefChar != 'E' && lonRefChar != 'W')) lonRefChar = 'E';
-        json += "\"gps_lon_ref\":\"" + std::string(1, lonRefChar) + "\",";
+        cJSON_AddNumberToObject(root, "gps_lon_deg", other.parsed_gps.longitude[0]);
+        cJSON_AddNumberToObject(root, "gps_lon_min", other.parsed_gps.longitude[1]);
+        cJSON_AddNumberToObject(root, "gps_lon_sec", other.parsed_gps.longitude[2]);
+        
+        char lonRefStr[2] = {other.parsed_gps.longref, '\0'};
+        if (lonRefStr[0] == 0 || (lonRefStr[0] != 'E' && lonRefStr[0] != 'W')) lonRefStr[0] = 'E';
+        cJSON_AddStringToObject(root, "gps_lon_ref", lonRefStr);
         
         // Altitude
-        snprintf(numBuf, sizeof(numBuf), "%.2f", other.parsed_gps.altitude);
-        json += "\"gps_altitude\":" + std::string(numBuf) + ",";
-        snprintf(numBuf, sizeof(numBuf), "%d", (int)other.parsed_gps.altref);
-        json += "\"gps_alt_ref\":" + std::string(numBuf) + ",";
+        cJSON_AddNumberToObject(root, "gps_altitude", other.parsed_gps.altitude);
+        cJSON_AddNumberToObject(root, "gps_alt_ref", other.parsed_gps.altref);
         
         // GPS timestamp
-        snprintf(numBuf, sizeof(numBuf), "%.0f", other.parsed_gps.gpstimestamp[0]);
-        json += "\"gps_time_hour\":" + std::string(numBuf) + ",";
-        snprintf(numBuf, sizeof(numBuf), "%.0f", other.parsed_gps.gpstimestamp[1]);
-        json += "\"gps_time_min\":" + std::string(numBuf) + ",";
-        snprintf(numBuf, sizeof(numBuf), "%.2f", other.parsed_gps.gpstimestamp[2]);
-        json += "\"gps_time_sec\":" + std::string(numBuf);
+        cJSON_AddNumberToObject(root, "gps_time_hour", other.parsed_gps.gpstimestamp[0]);
+        cJSON_AddNumberToObject(root, "gps_time_min", other.parsed_gps.gpstimestamp[1]);
+        cJSON_AddNumberToObject(root, "gps_time_sec", other.parsed_gps.gpstimestamp[2]);
     }
     
-    json += "}";
+    // Generate JSON string
+    char* jsonStr = cJSON_PrintUnformatted(root);
+    if (jsonStr) {
+        jsonOutput = jsonStr;
+        cJSON_free(jsonStr);
+    } else {
+        cJSON_Delete(root);
+        errorMessage = "Failed to generate JSON string";
+        return false;
+    }
     
-    jsonOutput = json;
+    cJSON_Delete(root);
     processor.recycle();
     
     LOGD("Extracted metadata JSON: %s", jsonOutput.c_str());

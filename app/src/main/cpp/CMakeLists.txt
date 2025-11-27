@@ -12,6 +12,7 @@ include_directories(${CMAKE_SOURCE_DIR}/jpeglib)  # For libjpeg headers
 include_directories(${CMAKE_SOURCE_DIR})  # For JXL stub headers
 include_directories(${CMAKE_SOURCE_DIR}/LibRaw)  # LibRaw headers
 include_directories(${CMAKE_SOURCE_DIR}/LibRaw/libraw)  # LibRaw internal headers
+include_directories(${CMAKE_SOURCE_DIR}/cJSON)  # cJSON headers
 include_directories(${ANDROID_NDK}/sources/android/support/include)
 
 # Collect all DNG SDK source files
@@ -51,6 +52,11 @@ endif()
 # In production, you'd want to include the full XMP SDK from Adobe
 add_library(xmp_stub STATIC
     xmp_stub.cpp
+)
+
+# cJSON library for JSON serialization
+add_library(cjson STATIC
+    cJSON/cJSON.c
 )
 
 # libjpeg library
@@ -158,6 +164,7 @@ if(DNG_SDK_SOURCES)
         dng_sdk
         raw
         jpeg
+        cjson
         xmp_stub
         android
         log
@@ -167,6 +174,7 @@ if(DNG_SDK_SOURCES)
 else()
     target_link_libraries(${CMAKE_PROJECT_NAME}
         raw
+        cjson
         android
         log
         z

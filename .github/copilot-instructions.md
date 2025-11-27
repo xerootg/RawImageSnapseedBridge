@@ -28,8 +28,19 @@ sudo make build
 The Docker build handles all dependencies including:
 - Android SDK/NDK
 - Adobe DNG SDK
-- LibRaw library
+- LibRaw library (git submodule)
+- cJSON library (git submodule)
 - libjpeg for JPEG export
+
+### Cloning the Repository
+
+```bash
+# Clone with submodules
+git clone --recursive https://github.com/fwibisono87/raw2dng2.git
+
+# Or if already cloned, initialize submodules
+git submodule update --init --recursive
+```
 
 ### Installing on Device
 
@@ -144,9 +155,27 @@ cpp/
 ├── raw_metadata.h            # Metadata structure shared across modules
 ├── raw2dng_jni.cpp           # JNI entry points (extractMetadataJson, etc.)
 │
-├── libraw/                   # LibRaw library source
+├── LibRaw/                   # LibRaw library (git submodule)
+├── cJSON/                    # cJSON library for JSON serialization (git submodule)
 ├── dng_sdk/                  # Adobe DNG SDK source
-└── libjpeg/                  # libjpeg-turbo source
+└── jpeglib/                  # libjpeg source
+```
+
+#### Git Submodules
+
+The project uses git submodules for external dependencies:
+
+```bash
+# LibRaw - RAW file processing library
+app/src/main/cpp/LibRaw -> https://github.com/LibRaw/LibRaw
+
+# cJSON - Lightweight JSON parser/generator
+app/src/main/cpp/cJSON -> https://github.com/DaveGamble/cJSON
+```
+
+To initialize submodules after cloning:
+```bash
+git submodule update --init --recursive
 ```
 
 ### Key Data Flows
@@ -441,6 +470,7 @@ SettingsDialog.kt
 └── View Open Source Licenses (button → LicensesDialog)
     ├── LibRaw (LGPL 2.1 / CDDL 1.0)
     ├── Adobe DNG SDK (Adobe license)
+    ├── cJSON (MIT license)
     ├── Independent JPEG Group (IJG license)
     └── Android/Kotlin Libraries (Apache 2.0)
 
@@ -586,6 +616,7 @@ ExifData.kt (hybrid RAW/non-RAW extraction):
 libraw_reader.cpp:
   → extractMetadataJson(inputPath, errorMessage): Static method
   → Returns JSON string with all metadata fields
+  → Uses cJSON library for proper JSON serialization (handles escaping, formatting)
   → Uses LibRaw's imgdata structs: idata, other, sizes, lens, shootinginfo
   → GPS validation: Only outputs GPS if coordinates are non-zero
   → Thread-safe: Uses localtime_r for timestamp conversion
