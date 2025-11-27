@@ -26,6 +26,8 @@ class ImagePreviewDialog : DialogFragment() {
 
     private var imageUris: ArrayList<Uri> = arrayListOf()
     private var fileNames: ArrayList<String> = arrayListOf()
+    private var dngStatus: ArrayList<Boolean> = arrayListOf()
+    private var jpegStatus: ArrayList<Boolean> = arrayListOf()
     private var selectedUris: HashSet<Uri> = hashSetOf()
     private var currentPosition: Int = 0
     private var selectionChangeListener: OnSelectionChangeListener? = null
@@ -49,12 +51,16 @@ class ImagePreviewDialog : DialogFragment() {
         private const val ARG_FILENAMES = "filenames"
         private const val ARG_POSITION = "position"
         private const val ARG_SELECTED_URIS = "selected_uris"
+        private const val ARG_DNG_STATUS = "dng_status"
+        private const val ARG_JPEG_STATUS = "jpeg_status"
 
         fun newInstance(
             uris: ArrayList<Uri>,
             fileNames: ArrayList<String>,
             initialPosition: Int,
-            selectedUris: ArrayList<Uri> = arrayListOf()
+            selectedUris: ArrayList<Uri> = arrayListOf(),
+            dngStatus: ArrayList<Boolean> = arrayListOf(),
+            jpegStatus: ArrayList<Boolean> = arrayListOf()
         ): ImagePreviewDialog {
             return ImagePreviewDialog().apply {
                 arguments = Bundle().apply {
@@ -62,13 +68,16 @@ class ImagePreviewDialog : DialogFragment() {
                     putStringArrayList(ARG_FILENAMES, fileNames)
                     putInt(ARG_POSITION, initialPosition)
                     putParcelableArrayList(ARG_SELECTED_URIS, selectedUris)
+                    // Store boolean arrays as serializable
+                    putSerializable(ARG_DNG_STATUS, dngStatus)
+                    putSerializable(ARG_JPEG_STATUS, jpegStatus)
                 }
             }
         }
 
         // Convenience method for single image (backwards compatibility)
         fun newInstance(uri: Uri, fileName: String): ImagePreviewDialog {
-            return newInstance(arrayListOf(uri), arrayListOf(fileName), 0, arrayListOf())
+            return newInstance(arrayListOf(uri), arrayListOf(fileName), 0, arrayListOf(), arrayListOf(false), arrayListOf(false))
         }
     }
 
@@ -101,6 +110,12 @@ class ImagePreviewDialog : DialogFragment() {
                 it.getParcelableArrayList<Uri>(ARG_SELECTED_URIS) ?: arrayListOf()
             }
             selectedUris = HashSet(selectedList)
+            
+            // Get conversion status arrays
+            @Suppress("UNCHECKED_CAST")
+            dngStatus = (it.getSerializable(ARG_DNG_STATUS) as? ArrayList<Boolean>) ?: arrayListOf()
+            @Suppress("UNCHECKED_CAST")
+            jpegStatus = (it.getSerializable(ARG_JPEG_STATUS) as? ArrayList<Boolean>) ?: arrayListOf()
         }
     }
 
@@ -223,7 +238,15 @@ class ImagePreviewDialog : DialogFragment() {
             adapter = thumbnailStripAdapter
         }
 
-        thumbnailStripAdapter.submitList(imageUris.toList())
+        // Build thumbnail strip items with conversion status
+        val thumbnailItems = imageUris.mapIndexed { index, uri ->
+            ThumbnailStripItem(
+                uri = uri,
+                isConvertedToDng = dngStatus.getOrElse(index) { false },
+                isConvertedToJpeg = jpegStatus.getOrElse(index) { false }
+            )
+        }
+        thumbnailStripAdapter.submitList(thumbnailItems)
         
         // Set initial selection and scroll to it
         if (currentPosition > 0) {

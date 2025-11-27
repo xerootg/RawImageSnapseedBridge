@@ -87,8 +87,11 @@ com.raw2dng/
 ├── OutputFormat.kt           # Enum: DNG, JPEG
 │
 ├── ThumbnailCache.kt         # LRU cache for RAW thumbnails extracted via LibRaw
+├── ThumbnailStripAdapter.kt  # Horizontal thumbnail strip in preview dialog
+├── ThumbnailStripItem.kt     # Data class with uri and conversion status
 ├── DNGConverter.kt           # JNI bridge to native code
 ├── ImagePreviewDialog.kt     # Fullscreen preview dialog with selection
+├── ImagePagerAdapter.kt      # ViewPager2 adapter for preview images
 └── FullscreenImageActivity.kt # Fullscreen RAW preview
 ```
 
@@ -168,18 +171,38 @@ GalleryFragment.loadImages()
 
 ### Conversion Status Sync
 
-When files are deleted from the Gallery, the Convert tab needs to update its badges:
+When files are converted or deleted, the UI updates in real-time:
 
 ```
-GalleryFragment.clearRaw2DNGFolder()
-  → Delete files based on current filter
-  → MediaScanner notified
+Conversion Complete:
+  → onTaskComplete updates RawFileItem.isConvertedToDng/Jpeg immediately
+  → updateItemConversionStatus(uri, format) sets the flag
+  → applyFilter() refreshes the UI with updated badges
 
-RawFilePickerFragment.onResume()
-  → refreshConversionStatus()
+Gallery Deletion:
+  → GalleryFragment.clearRaw2DNGFolder() or deleteRequestLauncher
+  → After 500ms delay (wait for file system)
+  → MainActivity.refreshConvertTab()
+  → RawFilePickerFragment.refreshConversionStatus()
   → Re-check ConvertedFilesHelper for each cached RawFileItem
   → Update mutable isConvertedToDng/isConvertedToJpeg
-  → Refresh UI
+  → adapter.notifyDataSetChanged() to refresh badges
+```
+
+### Preview Dialog with Thumbnail Strip
+
+```
+ImagePreviewDialog
+  → Fullscreen image preview with ViewPager2
+  → Thumbnail strip (gutter) at bottom shows all images
+  → ThumbnailStripAdapter displays ThumbnailStripItem:
+    - uri: Image URI
+    - isConvertedToDng: Shows "D" badge
+    - isConvertedToJpeg: Shows "J" badge
+    - Both: Shows "D/J" badge
+  → Green badges on dark background in bottom-right corner
+  → Selection border highlights current image
+  → JPEG/DNG convert buttons with selection count
 ```
 
 ### Output Directories
@@ -201,6 +224,8 @@ RawFilePickerFragment.onResume()
 6. **Multi-Select**: Long-press enables multi-select for batch operations
 7. **Sequential Conversion**: ConversionQueue processes files one at a time
 8. **Conversion Progress Grid**: Visual thumbnail grid showing per-file conversion status
+9. **Real-time Status Updates**: Conversion badges update immediately after conversion/deletion
+10. **Preview Conversion Badges**: Thumbnail strip shows D/J/D+J badges per image
 
 ### Color Matrix Handling
 
@@ -215,6 +240,9 @@ The app includes hardcoded color matrices for cameras not fully supported by Lib
 3. **GalleryAdapter** supports both click (open) and long-press (multi-select)
 4. **Android 11+ (R)** uses `MediaStore.createDeleteRequest()` for file deletion
 5. **JPEG output** uses LibRaw's dcraw processing with libjpeg encoding
+6. **MainActivity** holds references to both pickerFragment and galleryFragment for cross-tab communication
+7. **ThumbnailStripItem** carries conversion status (dng/jpeg booleans) for badge display
+8. **500ms delay** after deletion before refreshing Convert tab (ensures filesystem sync)
 
 ### Testing Checklist
 
@@ -229,6 +257,7 @@ When making changes, verify:
 - [ ] Conversion progress grid shows correct status per file
 - [ ] Multi-select works in gallery
 - [ ] "Open in..." works for selected files
+- [ ] Preview thumbnail strip shows D/J badges correctly
 
 ### Common Issues
 

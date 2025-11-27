@@ -361,9 +361,11 @@ class RawFilePickerFragment : Fragment() {
         // Get the currently visible (filtered) list of files
         val visibleFiles = getFilteredFiles()
         
-        // Build lists of URIs and filenames
+        // Build lists of URIs, filenames, and conversion status
         val uris = ArrayList(visibleFiles.map { it.uri })
         val fileNames = ArrayList(visibleFiles.map { it.name })
+        val dngStatus = ArrayList(visibleFiles.map { it.isConvertedToDng })
+        val jpegStatus = ArrayList(visibleFiles.map { it.isConvertedToJpeg })
         
         // Get currently selected URIs
         val selectedUris = ArrayList(adapter.getSelectedItems().map { it.uri })
@@ -371,7 +373,7 @@ class RawFilePickerFragment : Fragment() {
         // Find the position of the clicked item in the filtered list
         val position = visibleFiles.indexOfFirst { it.uri == item.uri }.coerceAtLeast(0)
         
-        val previewDialog = ImagePreviewDialog.newInstance(uris, fileNames, position, selectedUris)
+        val previewDialog = ImagePreviewDialog.newInstance(uris, fileNames, position, selectedUris, dngStatus, jpegStatus)
         
         // Handle selection changes from the preview dialog
         previewDialog.setOnSelectionChangeListener(object : ImagePreviewDialog.OnSelectionChangeListener {

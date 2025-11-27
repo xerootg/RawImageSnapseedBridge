@@ -20,4 +20,22 @@
         android:background="@drawable/thumbnail_strip_selected_border"
         android:visibility="gone" />
 
+    <!-- Conversion status badge (D, J, or D/J) -->
+    <TextView
+        android:id="@+id/conversionBadge"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:background="#CC000000"
+        android:paddingHorizontal="4dp"
+        android:paddingVertical="2dp"
+        android:textColor="#4CAF50"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:shadowColor="#FFFFFF"
+        android:shadowDx="0"
+        android:shadowDy="0"
+        android:shadowRadius="2"
+        android:visibility="gone" />
+
 </FrameLayout>
