@@ -55,14 +55,18 @@ class RawFileAdapter(
         if (selectedUris.contains(item.uri)) {
             selectedUris.remove(item.uri)
         } else {
-            selectedUris.add(item.uri)
+            // Don't allow selection of dimmed items
+            if (!item.isDimmed) {
+                selectedUris.add(item.uri)
+            }
         }
         notifyDataSetChanged()
     }
 
     fun selectAll(items: List<RawFileItem>) {
         selectedUris.clear()
-        items.forEach { selectedUris.add(it.uri) }
+        // Only select non-dimmed items
+        items.filter { !it.isDimmed }.forEach { selectedUris.add(it.uri) }
         notifyDataSetChanged()
     }
 
@@ -99,31 +103,58 @@ class RawFileAdapter(
             fileName.text = item.name
             fileInfo.text = item.formattedSize
 
-            // Show converted badge with format(s)
-            when {
-                item.isConvertedToDng && item.isConvertedToJpeg -> {
-                    convertedBadge.visibility = View.VISIBLE
-                    convertedBadge.text = "DNG, JPEG"
-                    itemView.alpha = 0.6f
+            // Handle dimmed state (already converted, shown grayed out)
+            if (item.isDimmed) {
+                // Heavily dimmed - not selectable
+                itemView.alpha = 0.35f
+                checkbox.visibility = View.GONE
+                
+                // Still show the badge
+                when {
+                    item.isConvertedToDng && item.isConvertedToJpeg -> {
+                        convertedBadge.visibility = View.VISIBLE
+                        convertedBadge.text = "DNG, JPEG"
+                    }
+                    item.isConvertedToDng -> {
+                        convertedBadge.visibility = View.VISIBLE
+                        convertedBadge.text = "DNG"
+                    }
+                    item.isConvertedToJpeg -> {
+                        convertedBadge.visibility = View.VISIBLE
+                        convertedBadge.text = "JPEG"
+                    }
+                    else -> {
+                        convertedBadge.visibility = View.GONE
+                    }
                 }
-                item.isConvertedToDng -> {
-                    convertedBadge.visibility = View.VISIBLE
-                    convertedBadge.text = "DNG"
-                    itemView.alpha = 0.6f
-                }
-                item.isConvertedToJpeg -> {
-                    convertedBadge.visibility = View.VISIBLE
-                    convertedBadge.text = "JPEG"
-                    itemView.alpha = 0.6f
-                }
-                else -> {
-                    convertedBadge.visibility = View.GONE
-                    itemView.alpha = 1.0f
+            } else {
+                // Normal state - show converted badge with slight dim
+                checkbox.visibility = View.VISIBLE
+                when {
+                    item.isConvertedToDng && item.isConvertedToJpeg -> {
+                        convertedBadge.visibility = View.VISIBLE
+                        convertedBadge.text = "DNG, JPEG"
+                        itemView.alpha = 0.6f
+                    }
+                    item.isConvertedToDng -> {
+                        convertedBadge.visibility = View.VISIBLE
+                        convertedBadge.text = "DNG"
+                        itemView.alpha = 0.6f
+                    }
+                    item.isConvertedToJpeg -> {
+                        convertedBadge.visibility = View.VISIBLE
+                        convertedBadge.text = "JPEG"
+                        itemView.alpha = 0.6f
+                    }
+                    else -> {
+                        convertedBadge.visibility = View.GONE
+                        itemView.alpha = 1.0f
+                    }
                 }
             }
 
-            // Checkbox state
-            val isSelected = selectedUris.contains(item.uri)
+            // Checkbox state - only if not dimmed
+            val isSelected = !item.isDimmed && selectedUris.contains(item.uri)
             checkbox.isChecked = isSelected
 
             // Cancel any previous loading job
@@ -143,11 +174,15 @@ class RawFileAdapter(
             // Use GestureDetector for double-tap detection
             val gestureDetector = GestureDetector(itemView.context, object : GestureDetector.SimpleOnGestureListener() {
                 override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
-                    onSelectionToggle(item)
+                    // Don't allow selection of dimmed items
+                    if (!item.isDimmed) {
+                        onSelectionToggle(item)
+                    }
                     return true
                 }
                 
                 override fun onDoubleTap(e: MotionEvent): Boolean {
+                    // Allow preview of any item, even dimmed ones
                     onDoubleTap(item)
                     return true
                 }
@@ -165,8 +200,11 @@ class RawFileAdapter(
             }
 
             // Checkbox click toggles selection directly (no double-tap needed)
+            // Only if not dimmed
             checkbox.setOnClickListener {
-                onSelectionToggle(item)
+                if (!item.isDimmed) {
+                    onSelectionToggle(item)
+                }
             }
         }
 

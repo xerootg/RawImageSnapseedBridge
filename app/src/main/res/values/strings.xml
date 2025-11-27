@@ -90,4 +90,6 @@
     <string name="raw_types_count">%1$d of %2$d types selected</string>
     <string name="raw_types_dialog_title">Select RAW file types</string>
     <string name="clear_all">Clear All</string>
+    <string name="hide_converted_label">Hide already converted images</string>
+    <string name="hide_converted_hint">When unchecked, converted images appear grayed out instead of hidden</string>
 </resources>

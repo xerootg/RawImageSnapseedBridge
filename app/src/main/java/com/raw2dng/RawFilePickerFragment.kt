@@ -380,10 +380,31 @@ class RawFilePickerFragment : Fragment() {
     }
 
     private fun getFilteredFiles(): List<RawFileItem> {
+        val hideConverted = SettingsDialog.getHideConverted(requireContext())
+        
         return when (currentFilter) {
-            FileFilter.ALL -> allRawFiles
-            FileFilter.NOT_DNG -> allRawFiles.filter { !it.isConvertedToDng }
-            FileFilter.NOT_JPEG -> allRawFiles.filter { !it.isConvertedToJpeg }
+            FileFilter.ALL -> {
+                // In ALL mode, no dimming - show everything as-is
+                allRawFiles.map { it.copy(isDimmed = false) }
+            }
+            FileFilter.NOT_DNG -> {
+                if (hideConverted) {
+                    // Hide converted: filter them out completely
+                    allRawFiles.filter { !it.isConvertedToDng }.map { it.copy(isDimmed = false) }
+                } else {
+                    // Show converted but dimmed
+                    allRawFiles.map { it.copy(isDimmed = it.isConvertedToDng) }
+                }
+            }
+            FileFilter.NOT_JPEG -> {
+                if (hideConverted) {
+                    // Hide converted: filter them out completely
+                    allRawFiles.filter { !it.isConvertedToJpeg }.map { it.copy(isDimmed = false) }
+                } else {
+                    // Show converted but dimmed
+                    allRawFiles.map { it.copy(isDimmed = it.isConvertedToJpeg) }
+                }
+            }
         }
     }
 
@@ -394,12 +415,25 @@ class RawFilePickerFragment : Fragment() {
         val totalCount = allRawFiles.size
         val dngCount = allRawFiles.count { it.isConvertedToDng }
         val jpegCount = allRawFiles.count { it.isConvertedToJpeg }
+        val selectableCount = filtered.count { !it.isDimmed }
         val showingCount = filtered.size
         
         binding.selectionCount.text = when (currentFilter) {
             FileFilter.ALL -> "$totalCount files ($dngCount DNG, $jpegCount JPEG converted)"
-            FileFilter.NOT_DNG -> "$showingCount not converted to DNG ($dngCount already DNG)"
-            FileFilter.NOT_JPEG -> "$showingCount not converted to JPEG ($jpegCount already JPEG)"
+            FileFilter.NOT_DNG -> {
+                if (selectableCount == showingCount) {
+                    "$showingCount not converted to DNG ($dngCount already DNG)"
+                } else {
+                    "$selectableCount selectable, $dngCount grayed out (already DNG)"
+                }
+            }
+            FileFilter.NOT_JPEG -> {
+                if (selectableCount == showingCount) {
+                    "$showingCount not converted to JPEG ($jpegCount already JPEG)"
+                } else {
+                    "$selectableCount selectable, $jpegCount grayed out (already JPEG)"
+                }
+            }
         }
 
         updateSelectionUI()
@@ -407,7 +441,8 @@ class RawFilePickerFragment : Fragment() {
 
     private fun updateSelectionUI() {
         val selectedCount = adapter.getSelectedItems().size
-        val totalVisible = getFilteredFiles().size
+        // Only count non-dimmed items as selectable
+        val selectableCount = getFilteredFiles().count { !it.isDimmed }
 
         binding.btnConvertDng.isEnabled = selectedCount > 0
         binding.btnConvertJpeg.isEnabled = selectedCount > 0
@@ -424,7 +459,7 @@ class RawFilePickerFragment : Fragment() {
             getString(R.string.to_jpeg)
         }
 
-        binding.btnSelectAll.text = if (selectedCount == totalVisible && totalVisible > 0) {
+        binding.btnSelectAll.text = if (selectedCount == selectableCount && selectableCount > 0) {
             "Deselect All"
         } else {
             getString(R.string.select_all)

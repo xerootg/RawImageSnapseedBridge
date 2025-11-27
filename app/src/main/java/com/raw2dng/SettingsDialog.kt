@@ -34,6 +34,7 @@ class SettingsDialog : DialogFragment() {
         const val PREFS_NAME = "raw2dng_prefs"
         const val KEY_AUTONAV_TIMEOUT = "autonav_timeout_seconds"
         const val KEY_ENABLED_RAW_TYPES = "enabled_raw_types"
+        const val KEY_HIDE_CONVERTED = "hide_converted_images"
         const val DEFAULT_TIMEOUT = 3
         
         // All supported RAW extensions (sorted alphabetically for display)
@@ -54,6 +55,15 @@ class SettingsDialog : DialogFragment() {
             val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             val saved = prefs.getStringSet(KEY_ENABLED_RAW_TYPES, null)
             return saved ?: ALL_RAW_EXTENSIONS.toSet()
+        }
+        
+        /**
+         * Get whether to hide already converted images (true) or show them dimmed (false).
+         * Default is true (hide them).
+         */
+        fun getHideConverted(context: Context): Boolean {
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            return prefs.getBoolean(KEY_HIDE_CONVERTED, true)
         }
     }
     
@@ -100,6 +110,10 @@ class SettingsDialog : DialogFragment() {
             showRawTypesDialog()
         }
         
+        // Setup hide converted checkbox
+        val chkHideConverted = view.findViewById<android.widget.CheckBox>(R.id.chkHideConverted)
+        chkHideConverted.isChecked = getHideConverted(requireContext())
+        
         val dialog = MaterialAlertDialogBuilder(requireContext())
             .setView(view)
             .create()
@@ -117,6 +131,10 @@ class SettingsDialog : DialogFragment() {
                 }
             }
             editor.putStringSet(KEY_ENABLED_RAW_TYPES, enabledSet)
+            
+            // Save hide converted setting
+            editor.putBoolean(KEY_HIDE_CONVERTED, chkHideConverted.isChecked)
+            
             editor.apply()
             
             onSettingsSavedListener?.onSettingsSaved()

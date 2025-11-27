@@ -13,7 +13,8 @@ data class RawFileItem(
     val path: String,
     var isConvertedToDng: Boolean,
     var isConvertedToJpeg: Boolean,
-    var isSelected: Boolean = false
+    var isSelected: Boolean = false,
+    var isDimmed: Boolean = false  // True when item is shown grayed out (already converted in current filter mode)
 ) {
     /**
      * Get the base name without extension.

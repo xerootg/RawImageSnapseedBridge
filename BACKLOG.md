@@ -4,7 +4,6 @@
 ### settings window, rendered as a gear on the top right corner of the gallery and convert views
 - all of these settings should be persisted
 *) a button to a dialogue with all license credits
-*) allow filters on convert picker tab to de-emphasize, gray out if you will, images which have already been converted to that format
 *) the jpeg conversion factors such as quality level, in a modal to be reused later. an ok button on the modal will be used 
 
 ### conversion workflow (depends on settings)

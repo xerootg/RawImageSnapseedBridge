@@ -77,6 +77,30 @@
         style="@style/Widget.Material3.Button.OutlinedButton"
         android:text="@string/raw_types_select" />
 
+    <!-- Hide converted images setting -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@android:color/darker_gray"
+        android:layout_marginTop="16dp"
+        android:layout_marginBottom="16dp" />
+
+    <CheckBox
+        android:id="@+id/chkHideConverted"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/hide_converted_label"
+        android:checked="true" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/hide_converted_hint"
+        android:textSize="12sp"
+        android:textColor="@android:color/darker_gray"
+        android:layout_marginStart="32dp"
+        android:layout_marginTop="4dp" />
+
     <Button
         android:id="@+id/btnSave"
         android:layout_width="match_parent"
