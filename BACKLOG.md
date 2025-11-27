@@ -5,7 +5,7 @@
 *) the filename under each thumbnail while convering should reflect the new filename not the old one. so not img.nef but img.jpeg or img.dng
 
 ## unsorted
-*) raw format picker brand collapse arrow does not match material's style, use something like this arrow - https://m3.material.io/components/menus/overview
+
 *) all possible raw metadata from libraw_data_t should be rendered in the advanced exif viewer for raw files, including manufacture notes, common and manufacturer specific.
 *) I see there's AF info, please render a green box on the convert preview where the af location was if the data is available - libraw_afinfo_item_t, in libraw_metadata_common_t, part of makernotes.
 *) converted DNG thumbnails are not rotated correctly.
