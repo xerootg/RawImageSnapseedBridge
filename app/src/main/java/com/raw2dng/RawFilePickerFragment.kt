@@ -485,8 +485,17 @@ class RawFilePickerFragment : Fragment() {
 
         // Show conversion overlay
         showConversionOverlay()
+        
+        // Determine which files need overwrite confirmation
+        val (needsConfirmation, readyToConvert) = selectedFiles.partition { rawFile ->
+            when (outputFormat) {
+                OutputFormat.DNG -> rawFile.isConvertedToDng
+                OutputFormat.JPEG -> rawFile.isConvertedToJpeg
+            }
+        }
 
         val fileCount = selectedFiles.size
+        val initialConvertCount = readyToConvert.size
         binding.conversionProgressBar.max = fileCount
         binding.conversionProgressBar.progress = 0
         binding.conversionStatus.text = "0/$fileCount"
@@ -494,21 +503,56 @@ class RawFilePickerFragment : Fragment() {
         
         // Populate the thumbnail grid with selected files
         val thumbnailItems = selectedFiles.map { rawFile ->
+            val needsOverwriteFlag = when (outputFormat) {
+                OutputFormat.DNG -> rawFile.isConvertedToDng
+                OutputFormat.JPEG -> rawFile.isConvertedToJpeg
+            }
             ConversionThumbnailItem(
                 uri = rawFile.uri,
                 fileName = rawFile.name,
-                status = ConversionItemStatus.PENDING
+                status = if (needsOverwriteFlag) ConversionItemStatus.NEEDS_CONFIRMATION else ConversionItemStatus.PENDING,
+                needsOverwrite = needsOverwriteFlag
             )
         }
         conversionThumbnailAdapter.setItems(thumbnailItems)
         
         val formatName = if (outputFormat == OutputFormat.DNG) "DNG" else "JPEG"
         val extension = if (outputFormat == OutputFormat.DNG) "dng" else "jpg"
+        
+        if (needsConfirmation.isNotEmpty()) {
+            appendLog("${needsConfirmation.size} file(s) already converted - tap to confirm overwrite\n")
+        }
 
-        Log.d(tag, "Starting $formatName conversion of $fileCount file(s)...")
-        appendLog("Starting $formatName conversion of $fileCount file(s)...\n")
+        Log.d(tag, "Starting $formatName conversion of $fileCount file(s) (${needsConfirmation.size} need confirmation)...")
+        if (initialConvertCount > 0) {
+            appendLog("Starting $formatName conversion of $initialConvertCount file(s)...\n")
+        }
+        
+        // Create a map for looking up RawFileItems by URI (for dynamic task creation)
+        val uriToRawFile = selectedFiles.associateBy { it.uri }
+        
+        // Set up overwrite confirmation callback
+        conversionThumbnailAdapter.setOnOverwriteConfirmed { uri ->
+            val rawFile = uriToRawFile[uri] ?: return@setOnOverwriteConfirmed
+            try {
+                val fileName = rawFile.name
+                val inputPath = copyUriToCache(uri, fileName)
+                val outputFileName = fileName.substringBeforeLast('.') + ".$extension"
+                val outputPath = File(requireContext().cacheDir, outputFileName).absolutePath
+                
+                val task = ConversionTask(uri, inputPath, outputPath, fileName, outputFormat)
+                conversionThumbnailAdapter.confirmOverwrite(uri)
+                appendLog("Overwrite confirmed: $fileName\n")
+                conversionQueue?.addTaskDynamic(task)
+            } catch (e: Exception) {
+                Log.e(tag, "Error preparing task for $uri", e)
+                conversionThumbnailAdapter.markError(uri, e.message ?: "Unknown error")
+                appendLog("✗ ${rawFile.name}: ${e.message ?: "Unknown error"}")
+            }
+        }
 
-        val tasks = selectedFiles.mapNotNull { rawFile ->
+        // Only create initial tasks for files that don't need confirmation
+        val tasks = readyToConvert.mapNotNull { rawFile ->
             try {
                 val fileName = rawFile.name
                 val inputPath = copyUriToCache(rawFile.uri, fileName)
@@ -527,16 +571,10 @@ class RawFilePickerFragment : Fragment() {
 
         conversionQueue = ConversionQueue(
             converter = converter,
-            onProgress = { current, _ ->
+            onTaskStarting = { task, _, _ ->
                 activity?.runOnUiThread {
-                    // Mark the current item as in-progress (progress bar increments on completion)
-                    if (current <= tasks.size) {
-                        val task = tasks.getOrNull(current - 1)
-                        task?.let {
-                            conversionThumbnailAdapter.markInProgress(it.inputUri)
-                            appendLog("Converting: ${it.fileName}...")
-                        }
-                    }
+                    conversionThumbnailAdapter.markInProgress(task.inputUri)
+                    appendLog("Converting: ${task.fileName}...")
                 }
             },
             onTaskComplete = { result ->
@@ -568,26 +606,40 @@ class RawFilePickerFragment : Fragment() {
             },
             onAllComplete = { successful, failed ->
                 activity?.runOnUiThread {
-                    val message = getString(R.string.conversion_complete, successful, failed)
-                    binding.conversionStatus.text = message
-                    binding.btnDone.isEnabled = true
-                    appendLog("\n$message")
+                    val pendingOverwrites = conversionThumbnailAdapter.getPendingOverwriteCount()
                     
-                    // Clear selection (status already updated per-item during conversion)
-                    adapter.clearSelection()
-                    
-                    // Refresh the list to show updated badges
-                    applyFilter()
-                    
-                    // Notify gallery to refresh
-                    (activity as? MainActivity)?.refreshGallery()
-                    
-                    // Track if conversion completed successfully (for checkbox trigger)
-                    conversionCompletedSuccessfully = (failed == 0 && successful > 0)
-                    
-                    // Auto-navigate if checkbox is checked AND all conversions succeeded
-                    if (binding.checkAutoNavigate.isChecked && conversionCompletedSuccessfully) {
-                        startAutoNavigateCountdown()
+                    if (pendingOverwrites > 0) {
+                        // Some files still need overwrite confirmation
+                        val message = if (successful + failed > 0) {
+                            "Converted: $successful, Failed: $failed. $pendingOverwrites awaiting confirmation."
+                        } else {
+                            "$pendingOverwrites file(s) awaiting overwrite confirmation"
+                        }
+                        binding.conversionStatus.text = message
+                        appendLog("\n$message")
+                        // Don't enable Done or auto-navigate yet
+                    } else {
+                        val message = getString(R.string.conversion_complete, successful, failed)
+                        binding.conversionStatus.text = message
+                        binding.btnDone.isEnabled = true
+                        appendLog("\n$message")
+                        
+                        // Clear selection (status already updated per-item during conversion)
+                        adapter.clearSelection()
+                        
+                        // Refresh the list to show updated badges
+                        applyFilter()
+                        
+                        // Notify gallery to refresh
+                        (activity as? MainActivity)?.refreshGallery()
+                        
+                        // Track if conversion completed successfully (for checkbox trigger)
+                        conversionCompletedSuccessfully = (failed == 0 && successful > 0)
+                        
+                        // Auto-navigate if checkbox is checked AND all conversions succeeded
+                        if (binding.checkAutoNavigate.isChecked && conversionCompletedSuccessfully) {
+                            startAutoNavigateCountdown()
+                        }
                     }
                 }
             }

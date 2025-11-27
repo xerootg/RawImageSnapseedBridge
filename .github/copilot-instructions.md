@@ -1,5 +1,8 @@
 # Raw2DNG - Copilot Instructions
 
+## Requirements for all changes made
+update this file to reflect any architectural or workflow changes made in the codebase. Ensure that all new features, classes, methods, and workflows are thoroughly documented here. Include diagrams or flowcharts if they help clarify complex processes. Maintain a clear and organized structure for easy navigation.
+
 ## Project Overview
 
 Raw2DNG is an Android application that converts RAW camera files (CR2, ARW, NEF, ORF, RAF, RW2, DNG, PEF, SRW, etc.) to Adobe DNG format and/or JPEG. It uses LibRaw for RAW file processing and the Adobe DNG SDK for DNG file creation.
@@ -133,11 +136,18 @@ RawFilePickerFragment.loadRawFiles()
 #### Conversion Flow
 ```
 RawFilePickerFragment.startConversion()
-  → Create ConversionThumbnailItem list from selected files
+  → Partition selected files into:
+    - readyToConvert: Files not yet converted to target format
+    - needsConfirmation: Files already converted (require user tap)
+  → Create ConversionThumbnailItem list:
+    - readyToConvert items start as PENDING
+    - needsConfirmation items start as NEEDS_CONFIRMATION
   → Show conversion overlay with thumbnail grid
-  → ConversionQueue.addTask(uri, format)
+  → Set up onOverwriteConfirmed callback for dynamic task creation
+  → ConversionQueue.addTasks() for readyToConvert items only
+  → ConversionQueue.start() begins processing
   → For each task:
-    → onProgress callback marks item as IN_PROGRESS
+    → onTaskStarting callback marks item as IN_PROGRESS
     → DNGConverter.convertToDNG() [JNI]
     → native dng_converter.cpp
       → libraw_reader reads RAW data
@@ -147,22 +157,30 @@ RawFilePickerFragment.startConversion()
       → Mark item SUCCESS or ERROR in thumbnail grid
       → Increment global progress bar
       → File written to Pictures/Raw2DNG/ or Pictures/Raw2DNG/JPEG/
+  → When user taps NEEDS_CONFIRMATION item:
+    → onOverwriteConfirmed callback creates task
+    → ConversionQueue.addTaskDynamic() adds to running queue
+    → Item changes to PENDING, then IN_PROGRESS when processing starts
   → MediaScanner notified
-  → onAllComplete enables Done button
+  → onAllComplete:
+    → If pendingOverwrites > 0: show "awaiting confirmation" message
+    → If all done: enable Done button, trigger auto-navigate if applicable
 ```
 
 #### Conversion Progress UI
 ```
 ConversionThumbnailAdapter
-  → ConversionThumbnailItem (uri, fileName, status, errorMessage)
-  → ConversionItemStatus: PENDING, IN_PROGRESS, SUCCESS, ERROR
+  → ConversionThumbnailItem (uri, fileName, status, errorMessage, needsOverwrite)
+  → ConversionItemStatus: PENDING, NEEDS_CONFIRMATION, IN_PROGRESS, SUCCESS, ERROR
   → Displays 3-column grid of thumbnails with status overlays:
     - PENDING: Dark overlay (50% opacity)
+    - NEEDS_CONFIRMATION: Medium overlay (60%) + orange "Tap to overwrite" badge
     - IN_PROGRESS: Darker overlay (70%) + spinning progress indicator
     - SUCCESS: Light overlay (30%) + green checkmark
     - ERROR: Medium overlay (60%) + red error icon
   → Global progress bar at bottom with "X/Y" count
   → Thumbnail loading: OS ContentResolver → ThumbnailCache fallback
+  → onOverwriteConfirmed callback: triggered when user taps NEEDS_CONFIRMATION item
 
 Log View (toggle with "Log" button)
   → Shows conversion log messages in monospace font
@@ -242,14 +260,15 @@ ImagePreviewDialog
 4. **Camera Color Matrices**: Applies camera-specific color matrices for accurate colors
 5. **Filter-Specific Clear**: Gallery clear button respects current filter (DNG/JPEG/All)
 6. **Multi-Select**: Long-press enables multi-select for batch operations
-7. **Sequential Conversion**: ConversionQueue processes files one at a time
+7. **Sequential Conversion**: ConversionQueue processes files one at a time with dynamic task addition
 8. **Conversion Progress Grid**: Visual thumbnail grid showing per-file conversion status
-9. **Real-time Status Updates**: Conversion badges update immediately after conversion/deletion
-10. **Preview Conversion Badges**: Thumbnail strip shows D/J/D+J badges per image
-11. **Auto-Navigate to Gallery**: Optional 3-second countdown after successful conversion
-12. **Log/Thumbnail Toggle**: Switch between visual progress grid and text log during conversion
-13. **Tab Navigation Cleanup**: Conversion overlay clears when navigating away if done
-14. **Screen Rotation Handling**: State preserved via configChanges (no activity recreation)
+9. **Overwrite Confirmation**: Previously converted files require tap to confirm before re-conversion
+10. **Real-time Status Updates**: Conversion badges update immediately after conversion/deletion
+11. **Preview Conversion Badges**: Thumbnail strip shows D/J/D+J badges per image
+12. **Auto-Navigate to Gallery**: Optional 3-second countdown after successful conversion
+13. **Log/Thumbnail Toggle**: Switch between visual progress grid and text log during conversion
+14. **Tab Navigation Cleanup**: Conversion overlay clears when navigating away if done
+15. **Screen Rotation Handling**: State preserved via configChanges (no activity recreation)
 
 ### Color Matrix Handling
 
@@ -272,6 +291,9 @@ The app includes hardcoded color matrices for cameras not fully supported by Lib
 11. **conversionCompletedSuccessfully** flag enables checkbox to trigger countdown after completion
 12. **configChanges** in manifest preserves state on screen rotation (no activity recreation)
 13. **Button styling**: All buttons use Material filled style for consistency
+14. **ConversionQueue.addTaskDynamic()**: Adds task to running queue, processes immediately if idle
+15. **ConversionQueue uses index-based processing**: `completed` counter tracks progress through `tasks` list
+16. **Overwrite detection**: Based on RawFileItem.isConvertedToDng/Jpeg matching OutputFormat
 
 ### Testing Checklist
 
@@ -294,6 +316,10 @@ When making changes, verify:
 - [ ] Screen rotation preserves selections and conversion state
 - [ ] Screen rotation during conversion doesn't interrupt it
 - [ ] Preview dialog survives screen rotation
+- [ ] Overwrite confirmation shows for already-converted files
+- [ ] Tapping overwrite confirmation queues and processes the file
+- [ ] Tapping multiple overwrites during conversion processes all of them
+- [ ] Done button disabled until all confirmations resolved or converted
 
 ### Common Issues
 

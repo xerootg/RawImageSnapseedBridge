@@ -10,7 +10,6 @@
 
 ### conversion workflow
 *) conversion should be parallelized, after ensuring the underlying JNI is thread-safe. if it is not threadsafe, do not parallelize.
-*) if an image has previously been converted, add a badge to the conversion thumbnail that says "tap to overwrite" and make sure the existing code overwrites the previous conversion. require the user to touch each overwrite image before converting it, and if it is not touched, and all other images have been rendered, done should be available. conversion should run for all images not needing overwrite confirmation, and confirmed overwrites should be dynamically added to the list of images to convert at the end of the conversion queue. The autonavigate checkbox feature should not autonavigate if not all images have been confirmed, even if all other images converted sucessfully
 
 ### raw handling
 *) rotation of the input should be transfered to the dng, even if that means rotating the image in memory before writing the dng
@@ -23,6 +22,7 @@
 *) allow the directories to search for raws in to be overridden (requires a picker)
 *) allow setting of the convert dialogue text log or thumbnail previews
 *) a button to a dialogue with all license credits
+*) allow filters on convert picker tab to de-emphasize, gray out if you will, images which have already been converted to that format
 
 ### exif
 *) preview view should have a button to show exif data

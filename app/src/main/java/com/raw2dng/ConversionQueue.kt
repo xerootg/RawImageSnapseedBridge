@@ -3,8 +3,6 @@ package com.raw2dng
 import android.net.Uri
 import android.util.Log
 import kotlinx.coroutines.*
-import kotlinx.coroutines.channels.Channel
-import java.io.File
 
 data class ConversionTask(
     val inputUri: Uri,
@@ -22,13 +20,12 @@ data class ConversionResult(
 
 class ConversionQueue(
     private val converter: DNGConverter,
-    private val onProgress: (current: Int, total: Int) -> Unit,
+    private val onTaskStarting: (task: ConversionTask, current: Int, total: Int) -> Unit,
     private val onTaskComplete: (ConversionResult) -> Unit,
     private val onAllComplete: (successful: Int, failed: Int) -> Unit
 ) {
     private val tag = "ConversionQueue"
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private val taskChannel = Channel<ConversionTask>(Channel.UNLIMITED)
     private val tasks = mutableListOf<ConversionTask>()
     private var isProcessing = false
     private var completed = 0
@@ -38,6 +35,50 @@ class ConversionQueue(
     fun addTasks(newTasks: List<ConversionTask>) {
         tasks.addAll(newTasks)
     }
+    
+    /**
+     * Add a single task dynamically. Will be picked up by the processing loop.
+     */
+    fun addTaskDynamic(task: ConversionTask) {
+        Log.d(tag, "Adding dynamic task: ${task.fileName}")
+        synchronized(tasks) {
+            tasks.add(task)
+        }
+        
+        // If not currently processing, start processing
+        if (!isProcessing) {
+            Log.d(tag, "Starting processing for dynamic task")
+            processPendingTasks()
+        }
+    }
+    
+    private fun processPendingTasks() {
+        if (isProcessing) return
+        
+        isProcessing = true
+        scope.launch {
+            while (true) {
+                val task = synchronized(tasks) {
+                    if (completed < tasks.size) {
+                        tasks[completed]
+                    } else {
+                        null
+                    }
+                }
+                
+                if (task != null) {
+                    processTask(task)
+                } else {
+                    break
+                }
+            }
+            
+            isProcessing = false
+            withContext(Dispatchers.Main) {
+                onAllComplete(successful, failed)
+            }
+        }
+    }
 
     fun start() {
         if (isProcessing) {
@@ -45,28 +86,11 @@ class ConversionQueue(
             return
         }
 
-        isProcessing = true
         completed = 0
         successful = 0
         failed = 0
 
-        scope.launch {
-            // Add all tasks to the channel
-            for (task in tasks) {
-                taskChannel.send(task)
-            }
-
-            // Process tasks sequentially
-            for (task in tasks) {
-                processTask(task)
-            }
-
-            // All tasks completed
-            isProcessing = false
-            withContext(Dispatchers.Main) {
-                onAllComplete(successful, failed)
-            }
-        }
+        processPendingTasks()
     }
 
     private suspend fun processTask(task: ConversionTask) {
@@ -76,7 +100,7 @@ class ConversionQueue(
 
                 completed++
                 withContext(Dispatchers.Main) {
-                    onProgress(completed, tasks.size)
+                    onTaskStarting(task, completed, tasks.size)
                 }
 
                 // Perform the conversion based on format

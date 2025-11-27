@@ -21,10 +21,11 @@ import kotlinx.coroutines.withContext
  * Status of a conversion item in the thumbnail grid
  */
 enum class ConversionItemStatus {
-    PENDING,      // Waiting to be converted
-    IN_PROGRESS,  // Currently being converted
-    SUCCESS,      // Conversion completed successfully
-    ERROR         // Conversion failed
+    PENDING,            // Waiting to be converted
+    NEEDS_CONFIRMATION, // Already converted, needs user tap to confirm overwrite
+    IN_PROGRESS,        // Currently being converted
+    SUCCESS,            // Conversion completed successfully
+    ERROR               // Conversion failed
 }
 
 /**
@@ -34,14 +35,17 @@ data class ConversionThumbnailItem(
     val uri: Uri,
     val fileName: String,
     var status: ConversionItemStatus = ConversionItemStatus.PENDING,
-    var errorMessage: String = ""
+    var errorMessage: String = "",
+    val needsOverwrite: Boolean = false  // True if file already exists and will overwrite
 )
 
 /**
  * Adapter for displaying conversion progress as a thumbnail grid.
  * Each item shows the file thumbnail with an overlay indicating conversion status.
  */
-class ConversionThumbnailAdapter : RecyclerView.Adapter<ConversionThumbnailAdapter.ViewHolder>() {
+class ConversionThumbnailAdapter(
+    private val onItemClick: ((ConversionThumbnailItem) -> Unit)? = null
+) : RecyclerView.Adapter<ConversionThumbnailAdapter.ViewHolder>() {
 
     private val items = mutableListOf<ConversionThumbnailItem>()
     private val thumbnailJobs = mutableMapOf<Int, Job>()
@@ -104,12 +108,47 @@ class ConversionThumbnailAdapter : RecyclerView.Adapter<ConversionThumbnailAdapt
     fun markError(uri: Uri, errorMessage: String) {
         updateStatus(uri, ConversionItemStatus.ERROR, errorMessage)
     }
+    
+    /**
+     * Confirm an overwrite - changes status from NEEDS_CONFIRMATION to PENDING
+     */
+    fun confirmOverwrite(uri: Uri) {
+        updateStatus(uri, ConversionItemStatus.PENDING)
+    }
 
     /**
      * Get the current progress (completed count)
      */
     fun getCompletedCount(): Int {
         return items.count { it.status == ConversionItemStatus.SUCCESS || it.status == ConversionItemStatus.ERROR }
+    }
+    
+    /**
+     * Get count of items still needing overwrite confirmation
+     */
+    fun getNeedsConfirmationCount(): Int {
+        return items.count { it.status == ConversionItemStatus.NEEDS_CONFIRMATION }
+    }
+    
+    /**
+     * Alias for getNeedsConfirmationCount for backward compatibility
+     */
+    fun getPendingOverwriteCount(): Int = getNeedsConfirmationCount()
+    
+    /**
+     * Set the callback for when an overwrite is confirmed
+     */
+    fun setOnOverwriteConfirmed(callback: (Uri) -> Unit) {
+        onOverwriteConfirmed = callback
+    }
+    
+    private var onOverwriteConfirmed: ((Uri) -> Unit)? = null
+    
+    /**
+     * Get an item by URI
+     */
+    fun getItem(uri: Uri): ConversionThumbnailItem? {
+        return items.find { it.uri == uri }
     }
 
     /**
@@ -128,6 +167,7 @@ class ConversionThumbnailAdapter : RecyclerView.Adapter<ConversionThumbnailAdapt
         private val progressBar: ProgressBar = itemView.findViewById(R.id.itemProgressBar)
         private val statusIcon: ImageView = itemView.findViewById(R.id.statusIcon)
         private val fileName: TextView = itemView.findViewById(R.id.fileName)
+        private val overwriteBadge: TextView = itemView.findViewById(R.id.overwriteBadge)
         
         private var loadJob: Job? = null
         private var currentPosition: Int = -1
@@ -150,14 +190,31 @@ class ConversionThumbnailAdapter : RecyclerView.Adapter<ConversionThumbnailAdapt
                 }
             }
             thumbnailJobs[position] = loadJob!!
+            
+            // Set click listener for confirmation items
+            itemView.setOnClickListener {
+                if (item.status == ConversionItemStatus.NEEDS_CONFIRMATION) {
+                    onItemClick?.invoke(item)
+                    onOverwriteConfirmed?.invoke(item.uri)
+                }
+            }
 
             // Update UI based on status
+            overwriteBadge.visibility = View.GONE  // Reset badge visibility
+            
             when (item.status) {
                 ConversionItemStatus.PENDING -> {
                     progressOverlay.visibility = View.VISIBLE
                     progressOverlay.alpha = 0.5f
                     progressBar.visibility = View.GONE
                     statusIcon.visibility = View.GONE
+                }
+                ConversionItemStatus.NEEDS_CONFIRMATION -> {
+                    progressOverlay.visibility = View.VISIBLE
+                    progressOverlay.alpha = 0.6f
+                    progressBar.visibility = View.GONE
+                    statusIcon.visibility = View.GONE
+                    overwriteBadge.visibility = View.VISIBLE
                 }
                 ConversionItemStatus.IN_PROGRESS -> {
                     progressOverlay.visibility = View.VISIBLE

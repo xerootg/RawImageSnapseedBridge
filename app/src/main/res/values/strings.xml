@@ -65,6 +65,7 @@
     <string name="done">Done</string>
     <string name="done_countdown">Done (%1$d)</string>
     <string name="auto_navigate_gallery">Automatically go to Gallery on completion</string>
+    <string name="tap_to_overwrite">tap to overwrite</string>
     <string name="show_log">Log</string>
     <string name="show_thumbnails">Thumbnails</string>
     <string name="view_gallery">View Gallery</string>

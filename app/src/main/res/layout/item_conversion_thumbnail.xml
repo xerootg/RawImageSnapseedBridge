@@ -64,6 +64,24 @@
                 app:layout_constraintStart_toStartOf="@id/conversionThumbnail"
                 app:layout_constraintTop_toTopOf="@id/conversionThumbnail" />
 
+            <!-- Overwrite confirmation badge -->
+            <TextView
+                android:id="@+id/overwriteBadge"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="#E6000000"
+                android:paddingHorizontal="8dp"
+                android:paddingVertical="4dp"
+                android:text="@string/tap_to_overwrite"
+                android:textColor="#FF9800"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                android:visibility="gone"
+                app:layout_constraintBottom_toTopOf="@id/fileName"
+                app:layout_constraintEnd_toEndOf="@id/conversionThumbnail"
+                app:layout_constraintStart_toStartOf="@id/conversionThumbnail"
+                app:layout_constraintTop_toTopOf="@id/conversionThumbnail" />
+
             <!-- File name at bottom -->
             <TextView
                 android:id="@+id/fileName"
