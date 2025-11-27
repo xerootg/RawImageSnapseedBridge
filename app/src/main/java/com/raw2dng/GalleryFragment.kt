@@ -64,6 +64,12 @@ class GalleryFragment : Fragment() {
     ) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
             Toast.makeText(requireContext(), "Files deleted successfully", Toast.LENGTH_SHORT).show()
+            // Delay the refresh to ensure files are actually deleted from disk
+            // MediaStore deletion is asynchronous
+            viewLifecycleOwner.lifecycleScope.launch {
+                kotlinx.coroutines.delay(500)
+                (activity as? MainActivity)?.refreshConvertTab()
+            }
         } else {
             Toast.makeText(requireContext(), "Deletion cancelled", Toast.LENGTH_SHORT).show()
         }
@@ -427,6 +433,9 @@ class GalleryFragment : Fragment() {
                     val message = getString(successMessage, deletedCount)
                     Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show()
                     loadImages()
+                    
+                    // Notify Convert tab to refresh its conversion status badges
+                    (activity as? MainActivity)?.refreshConvertTab()
                 }
             }
         }

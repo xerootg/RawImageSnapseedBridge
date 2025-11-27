@@ -18,6 +18,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainTabsBinding
     private var galleryFragment: GalleryFragment? = null
+    private var pickerFragment: RawFilePickerFragment? = null
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -103,6 +104,10 @@ class MainActivity : AppCompatActivity() {
     fun refreshGallery() {
         galleryFragment?.refresh()
     }
+    
+    fun refreshConvertTab() {
+        pickerFragment?.refreshConversionStatus()
+    }
 
     fun navigateToGallery() {
         binding.viewPager.currentItem = 1
@@ -118,7 +123,10 @@ class MainActivity : AppCompatActivity() {
 
         override fun createFragment(position: Int): Fragment {
             return when (position) {
-                0 -> RawFilePickerFragment.newInstance()
+                0 -> {
+                    pickerFragment = RawFilePickerFragment.newInstance()
+                    pickerFragment!!
+                }
                 1 -> {
                     galleryFragment = GalleryFragment()
                     galleryFragment!!

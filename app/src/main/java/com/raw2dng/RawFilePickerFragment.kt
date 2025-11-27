@@ -92,8 +92,14 @@ class RawFilePickerFragment : Fragment() {
     /**
      * Refresh the conversion status of all cached RAW files.
      * This is called on resume to reflect any changes made in the gallery (e.g., deleted files).
+     * Also called by MainActivity when gallery deletes files.
      */
-    private fun refreshConversionStatus() {
+    fun refreshConversionStatus() {
+        if (_binding == null) {
+            Log.d(tag, "refreshConversionStatus: binding is null, skipping")
+            return
+        }
+        
         viewLifecycleOwner.lifecycleScope.launch {
             var changed = false
             withContext(Dispatchers.IO) {
@@ -109,7 +115,10 @@ class RawFilePickerFragment : Fragment() {
                 }
             }
             if (changed && _binding != null) {
+                Log.d(tag, "Refreshing UI after status change")
                 applyFilter()
+                // Force the adapter to rebind all items
+                adapter.notifyDataSetChanged()
             }
         }
     }
@@ -470,6 +479,9 @@ class RawFilePickerFragment : Fragment() {
                         // Mark success in thumbnail grid
                         conversionThumbnailAdapter.markSuccess(result.task.inputUri)
                         Log.d(tag, "✓ ${result.task.fileName}")
+                        
+                        // Immediately update the RawFileItem's conversion status
+                        updateItemConversionStatus(result.task.inputUri, result.task.outputFormat)
                     } else {
                         // Mark error in thumbnail grid
                         conversionThumbnailAdapter.markError(result.task.inputUri, result.errorMessage)
@@ -483,9 +495,11 @@ class RawFilePickerFragment : Fragment() {
                     binding.conversionStatus.text = message
                     binding.btnDone.isEnabled = true
                     
-                    // Clear selection and reload files to update converted status
+                    // Clear selection (status already updated per-item during conversion)
                     adapter.clearSelection()
-                    loadRawFiles()
+                    
+                    // Refresh the list to show updated badges
+                    applyFilter()
                     
                     // Notify gallery to refresh
                     (activity as? MainActivity)?.refreshGallery()
@@ -495,6 +509,20 @@ class RawFilePickerFragment : Fragment() {
 
         conversionQueue?.addTasks(tasks)
         conversionQueue?.start()
+    }
+    
+    /**
+     * Update the conversion status of a specific item after successful conversion.
+     * This provides immediate feedback without requiring a full file reload.
+     */
+    private fun updateItemConversionStatus(uri: Uri, format: OutputFormat) {
+        allRawFiles.find { it.uri == uri }?.let { item ->
+            when (format) {
+                OutputFormat.DNG -> item.isConvertedToDng = true
+                OutputFormat.JPEG -> item.isConvertedToJpeg = true
+            }
+            Log.d(tag, "Updated status for ${item.name}: DNG=${item.isConvertedToDng}, JPEG=${item.isConvertedToJpeg}")
+        }
     }
 
     private fun showConversionOverlay() {
