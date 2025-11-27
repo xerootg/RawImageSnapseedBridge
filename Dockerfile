@@ -34,7 +34,7 @@ ENV DOTNET_ROOT=/root/.dotnet
 ENV PATH=${PATH}:/root/.dotnet:/root/.dotnet/tools
 
 # Install GitVersion as a .NET global tool
-RUN /root/.dotnet/dotnet tool install --global GitVersion.Tool --version 6.*
+RUN /root/.dotnet/dotnet tool install --global GitVersion.Tool --version 5.*
 
 # Set Java environment
 ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
