@@ -1,15 +1,44 @@
-# Raw2DNG - Android RAW to DNG Converter
+# Raw2DNG - Android RAW to DNG/JPEG Converter
 
-A proof-of-concept Android application that converts proprietary RAW files (CR2, ARW, NEF, etc.) to Adobe DNG format using the Adobe DNG SDK.
+An Android application that converts proprietary RAW camera files (CR2, ARW, NEF, ORF, RAF, RW2, PEF, SRW, etc.) to Adobe DNG format and/or JPEG. It uses LibRaw for RAW file processing and the Adobe DNG SDK for DNG file creation.
 
 ## Features
 
-- ✅ Select multiple RAW files from device storage
-- ✅ Queue-based conversion processing
-- ✅ Progress tracking with detailed logs
-- ✅ Support for various RAW formats (CR2, ARW, NEF, RAF, ORF, etc.)
-- ✅ Native C++ implementation using Adobe DNG SDK
-- ✅ Simple, functional UI for proof-of-concept testing
+### Core Conversion
+- ✅ Convert RAW files to Adobe DNG format
+- ✅ Convert RAW files to high-quality JPEG
+- ✅ Parallel conversion with configurable thread count (1 to N CPU cores)
+- ✅ Visual conversion progress with thumbnail grid and status overlays
+- ✅ Overwrite confirmation for already-converted files
+- ✅ Complete EXIF/metadata preservation in both DNG and JPEG output
+
+### File Management
+- ✅ Browse RAW files with thumbnail previews
+- ✅ Filter chips: All / Not DNG / Not JPEG
+- ✅ Hide or dim already-converted images
+- ✅ Gallery view for converted files with DNG/JPEG/All filters
+- ✅ Multi-select mode with batch operations
+- ✅ Regenerate converted files from original RAW sources
+
+### Preview & Metadata
+- ✅ Fullscreen image preview with swipe navigation
+- ✅ Thumbnail strip (gutter) with conversion status badges
+- ✅ EXIF/metadata overlay with detailed camera, lens, exposure, and GPS info
+- ✅ Zoom controls and file size display
+- ✅ Double-tap to open fullscreen preview
+
+### Integration
+- ✅ Auto-open single DNG in Snapseed (optional)
+- ✅ Share single JPEG via Android share sheet (optional)
+- ✅ Auto-navigate to Gallery on conversion completion
+- ✅ Open converted files in external apps
+
+### User Experience
+- ✅ Material 3 theming with dynamic colors
+- ✅ Three-tab interface: Convert, Gallery, Settings
+- ✅ Configurable JPEG quality, chroma subsampling, and Huffman optimization
+- ✅ Hierarchical RAW format selection by manufacturer
+- ✅ Screen rotation handling with state preservation
 - ✅ Docker-based build system (no Android Studio required!)
 
 ## Quick Start with Docker 🐳
@@ -20,20 +49,26 @@ A proof-of-concept Android application that converts proprietary RAW files (CR2,
 # 1. Install Docker (if not already installed)
 # See: https://docs.docker.com/get-docker/
 
-# 2. Clone the repository
-git clone <repo-url>
+# 2. Clone the repository with submodules
+git clone --recursive <repo-url>
 cd raw2dng2
+
+# Or if already cloned, initialize submodules
+git submodule update --init --recursive
 
 # 3. (Optional) Add Adobe DNG SDK for real conversion
 # Download from: https://helpx.adobe.com/camera-raw/digital-negative.html
 # Then: cp /path/to/dng_sdk/source/*.{cpp,h} app/src/main/cpp/dng_sdk/
 
 # 4. Build the APK (one command!)
-make build
+sudo make build
 # or: ./docker-build.sh
 
 # 5. Your APK is ready!
 ls output/app-debug.apk
+
+# 6. Install on connected device
+adb install output/app-debug.apk
 ```
 
 **That's it!** No Android Studio, no SDK setup, just Docker and you're done.
@@ -157,212 +192,196 @@ For detailed Docker instructions, see **[DOCKER_BUILD.md](DOCKER_BUILD.md)**.
 
 ## Usage
 
-### Testing the Conversion
+### Application Overview
+
+The app uses a three-tab interface:
+
+1. **Convert Tab** - Browse and convert RAW files
+2. **Gallery Tab** - View and manage converted images
+3. **Settings Tab** - Configure app preferences
+
+### Converting RAW Files
 
 1. **Launch the App**
    - Open "Raw2DNG" from your device's app drawer
 
-2. **Check SDK Status**
-   - The log at the bottom will show SDK availability status
-   - If SDK is available: "SDK Status: Adobe DNG SDK (version info)"
-   - If SDK is missing: Warning messages will appear
+2. **Browse RAW Files**
+   - The Convert tab displays RAW files from your device with thumbnails
+   - Use filter chips to show: All / Not DNG / Not JPEG
+   - Already-converted files appear dimmed (or hidden, based on settings)
 
-3. **Select RAW Files**
-   - Tap "SELECT RAW FILES" button
-   - Grant storage permissions if prompted
-   - Navigate to your RAW files (CR2, ARW, NEF, etc.)
-   - Select one or multiple files
-   - The app will show "X file(s) selected"
+3. **Select Files**
+   - Single-tap to toggle file selection
+   - Double-tap to open fullscreen preview
+   - Selected files show a checkmark overlay
 
 4. **Convert Files**
-   - Tap "CONVERT TO DNG" button
-   - Monitor progress in the progress bar and log
-   - Converted files are saved to: `/storage/emulated/0/Android/data/com.raw2dng/files/Documents/Raw2DNG/`
+   - Tap the DNG or JPEG button to start conversion
+   - A progress overlay shows:
+     - Thumbnail grid with per-file status (pending, in-progress, success, error)
+     - Progress bar with X/Y count
+     - Log view (toggle with Log button)
+   - Previously converted files require tap to confirm overwrite
+   - Conversion runs in parallel (configurable 1-N threads)
 
-5. **Check Results**
-   - Success: ✓ filename.CR2 -> filename.dng
-   - Failure: ✗ filename.CR2: [error message]
-   - Final summary shows successful and failed conversions
+5. **After Conversion**
+   - Auto-navigate to Gallery (optional, with countdown)
+   - Or tap Done to dismiss the overlay
+   - Single DNG can auto-open in Snapseed (if enabled)
+   - Single JPEG can open share sheet (if enabled)
 
-### Accessing Converted Files
+### Gallery Tab
 
-Converted DNG files are saved to the app's external files directory:
+- View converted DNG and JPEG files with thumbnails
+- Filter by: DNG Only / JPEG Only / All
+- Single-tap opens file in external app
+- Double-tap opens fullscreen preview
+- Long-press enables multi-select mode:
+  - **Preview**: Open selected images in fullscreen viewer
+  - **Regenerate**: Re-convert from original RAW files
+  - **Open with**: Send to external app
+- Clear folder button (respects current filter)
+- File size displayed on thumbnails
+
+### Fullscreen Preview
+
+- Swipe left/right to navigate between images
+- Thumbnail strip at bottom shows all images with:
+  - D/J badges for conversion status (Convert tab)
+  - Green checkmarks for selected items (Gallery)
+- Tap info button to show EXIF/metadata overlay:
+  - Camera, lens, exposure, shooting info
+  - Dimensions, GPS, date/time
+  - Advanced view shows raw JSON metadata
+- Zoom controls available
+- Toggle selection with checkbox button
+
+### Settings Tab
+
+- **Auto-Navigate Timeout**: 0-30 seconds countdown after conversion
+- **Conversion Threads**: 1 to N CPU cores for parallel processing
+- **Enabled RAW Types**: Select formats by manufacturer (Canon, Nikon, Sony, etc.)
+- **Hide Already Converted**: Hide vs dim converted images in Convert tab
+- **Open Single DNG in Snapseed**: Auto-open after single DNG conversion
+- **Share Single JPEG**: Open share sheet after single JPEG conversion
+- **JPEG Quality Settings**: Quality (1-100), chroma subsampling, Huffman optimization
+- **View Open Source Licenses**: Attribution for LibRaw, DNG SDK, cJSON, libjpeg
+
+### Output Directories
+
+Converted files are saved to public storage:
 
 ```
-/storage/emulated/0/Android/data/com.raw2dng/files/Documents/Raw2DNG/
+/storage/emulated/0/Pictures/Raw2DNG/
+├── *.dng                     # Converted DNG files
+└── JPEG/
+    └── *.jpg                 # Converted JPEG files
 ```
 
-You can access these files using:
-- Android File Manager app
-- ADB: `adb pull /storage/emulated/0/Android/data/com.raw2dng/files/Documents/Raw2DNG/`
+Access files via:
+- Gallery app or any file manager
+- ADB: `adb pull /storage/emulated/0/Pictures/Raw2DNG/`
 - USB file transfer (MTP mode)
 
 ## Supported RAW Formats
 
-The Adobe DNG SDK supports reading many proprietary RAW formats, including:
+The app uses LibRaw for RAW file reading, supporting formats organized by manufacturer:
 
-- **Canon**: CR2, CR3, CRW
-- **Nikon**: NEF, NRW
-- **Sony**: ARW, SRF, SR2
-- **Fujifilm**: RAF
-- **Olympus**: ORF
-- **Panasonic**: RW2, RAW
-- **Pentax**: PEF, DNG
-- **Adobe**: DNG
-- **And many more...**
+| Manufacturer | Formats |
+|-------------|---------|
+| **Canon** | CR2, CR3, CRW |
+| **Nikon** | NEF, NRW |
+| **Sony** | ARW, SRF, SR2 |
+| **Fujifilm** | RAF |
+| **Olympus/OM System** | ORF |
+| **Panasonic/Lumix** | RW2, RAW |
+| **Pentax** | PEF |
+| **Samsung** | SRW |
+| **Hasselblad** | 3FR, FFF |
+| **Phase One/Leaf** | IIQ |
+| **Kodak** | DCR, KDC |
+| **Epson** | ERF |
+| **Mamiya** | MEF |
 
-**Note**: Format support depends on the Adobe DNG SDK version. Some newer proprietary formats may require the latest SDK version.
+**Note**: You can enable/disable specific formats in Settings → Enabled RAW File Types.
+
+## Known Limitations
+
+1. **Scoped Storage**: Files created by previous app installations cannot be overwritten directly. Delete from Gallery first, then re-convert.
+2. **DNG Thumbnail Orientation**: Android's `loadThumbnail()` doesn't apply EXIF orientation for DNG files; app manually rotates.
+3. **Package Visibility**: AndroidManifest must declare Snapseed package for integration to work on Android 11+.
+4. **Camera Color Matrices**: Some newer cameras may need hardcoded color matrices for accurate colors.
 
 ## Troubleshooting
 
 ### Build Errors
 
 **"Adobe DNG SDK source files not found"**
-- Solution: Download and install the Adobe DNG SDK as described above
-- The app will still compile but create placeholder files instead of real conversions
+- Download and install the Adobe DNG SDK as described in Prerequisites
 
 **"NDK not configured"**
-- Solution: Install Android NDK via Android Studio SDK Manager
-- Go to: Tools → SDK Manager → SDK Tools → Check "NDK (Side by side)"
+- Install Android NDK via Android Studio SDK Manager
 
 **"CMake not found"**
-- Solution: Install CMake via Android Studio SDK Manager
-- Go to: Tools → SDK Manager → SDK Tools → Check "CMake"
+- Install CMake via Android Studio SDK Manager
 
-### Runtime Errors
+### Runtime Issues
 
-**"Storage permission denied"**
-- Solution: Grant storage permissions when prompted
-- Or manually: Settings → Apps → Raw2DNG → Permissions → Storage → Allow
-
-**"Conversion failed" with SDK warnings**
-- Solution: Ensure Adobe DNG SDK is properly installed
-- Check that .cpp and .h files are in `app/src/main/cpp/dng_sdk/`
-- Rebuild the project: Build → Clean Project, then Build → Rebuild Project
-
-**"File not found" or "Cannot read file"**
-- Solution: Ensure RAW files are accessible on device storage
-- Try copying RAW files to a public directory like Downloads or DCIM
-
-### Testing Without DNG SDK
-
-The app can be built and run without the Adobe DNG SDK for UI testing purposes:
-- It will create placeholder DNG files instead of real conversions
-- Useful for testing the queue mechanism and UI flow
-- Real conversion requires the SDK to be installed
-
-## Project Structure
-
-```
-raw2dng2/
-├── app/
-│   ├── src/
-│   │   ├── main/
-│   │   │   ├── cpp/                    # Native C++ code
-│   │   │   │   ├── dng_sdk/           # Adobe DNG SDK files (user-provided)
-│   │   │   │   ├── CMakeLists.txt     # CMake build configuration
-│   │   │   │   ├── dng_converter.cpp  # DNG conversion logic
-│   │   │   │   ├── raw2dng_jni.cpp    # JNI bindings
-│   │   │   │   └── xmp_stub.cpp       # XMP SDK stub
-│   │   │   ├── java/com/raw2dng/      # Kotlin/Java code
-│   │   │   │   ├── MainActivity.kt    # Main UI activity
-│   │   │   │   ├── DNGConverter.kt    # JNI wrapper
-│   │   │   │   └── ConversionQueue.kt # Queue manager
-│   │   │   ├── res/                   # Android resources
-│   │   │   └── AndroidManifest.xml    # App manifest
-│   │   └── build.gradle               # App-level build config
-│   └── build.gradle                   # Module-level build config
-├── build.gradle                       # Project-level build config
-├── settings.gradle                    # Project settings
-├── download_dng_sdk.sh               # Helper script for SDK setup
-└── README.md                         # This file
+**Install fails with INSTALL_FAILED_UPDATE_INCOMPATIBLE**
+```bash
+adb uninstall com.raw2dng && adb install output/app-debug.apk
 ```
 
-## Technical Details
+**Purple cast in dark images**
+- Check per-channel black level handling in `libraw_to_dng.cpp`
 
-### Architecture
+**Wrong colors on specific camera**
+- May need camera-specific color matrix in `libraw_to_dng.cpp`
 
-- **UI Layer**: Kotlin with Android SDK
-  - File picker using Storage Access Framework
-  - Coroutines for asynchronous operations
-  - LiveData for UI updates
+**Corrupt output during parallel conversion**
+- Ensure `LIBRAW_NOTHREADS` is NOT defined in CMakeLists.txt
 
-- **Business Logic**: Kotlin
-  - Queue-based task processing
-  - Error handling and logging
-  - File I/O operations
+**File gets "(1)" suffix on overwrite**
+- File was created by previous app installation; delete from Gallery first
 
-- **Native Layer**: C++ with JNI
-  - Adobe DNG SDK integration
-  - RAW file parsing and DNG writing
-  - Exception handling and error reporting
-
-### Build Configuration
-
-- **Min SDK**: Android 7.0 (API 24)
-- **Target SDK**: Android 14 (API 34)
-- **NDK**: C++17 with STL support
-- **ABIs**: arm64-v8a, armeabi-v7a, x86, x86_64
-
-### Dependencies
-
-- AndroidX Core KTX
-- AndroidX AppCompat
-- Material Design Components
-- Kotlin Coroutines
-- Adobe DNG SDK (external, user-provided)
-
-## Known Limitations
-
-This is a **proof-of-concept** application with the following limitations:
-
-1. **UI/UX**: Minimal, functional interface - not production-ready
-2. **Error Handling**: Basic error messages - could be more user-friendly
-3. **File Management**: Limited file browsing capabilities
-4. **Performance**: Sequential processing - could be parallelized
-5. **Format Detection**: No automatic format validation
-6. **Metadata**: XMP support disabled (qDNGUseXMP=0)
-7. **Testing**: Limited testing on various RAW formats
-8. **Icon**: Placeholder icon - needs proper app icon
-
-## Future Improvements
-
-Potential enhancements for production version:
-
-- [ ] Parallel conversion processing
-- [ ] Better error handling and user feedback
-- [ ] RAW format validation before conversion
-- [ ] Conversion settings/options (compression, preview size, etc.)
-- [ ] Progress notifications for background processing
-- [ ] File browser with RAW file filtering
-- [ ] Batch operations (delete, share, etc.)
-- [ ] XMP metadata preservation
-- [ ] Custom output directory selection
-- [ ] App icon and branding
-- [ ] Comprehensive testing suite
+**RAW files not appearing**
+- Check Settings → Enabled RAW File Types
 
 ## License
 
-This project structure and application code is provided as-is for educational purposes.
+This project uses multiple open-source components with various licenses:
 
-**Important**: The Adobe DNG SDK has its own license agreement. You must comply with Adobe's licensing terms when using the DNG SDK. Download and review the license from Adobe's website.
+- **LibRaw**: LGPL 2.1 / CDDL 1.0 dual license
+- **Adobe DNG SDK**: Adobe license (must download separately)
+- **cJSON**: MIT license
+- **libjpeg**: Independent JPEG Group license
+- **Android/Kotlin Libraries**: Apache 2.0
+
+View full license details in the app via Settings → View Open Source Licenses.
+
+**Important**: The Adobe DNG SDK has its own license agreement. You must comply with Adobe's licensing terms when using the DNG SDK.
 
 ## Resources
 
 - [Adobe DNG SDK](https://helpx.adobe.com/camera-raw/digital-negative.html)
 - [Adobe DNG Specification](https://helpx.adobe.com/photoshop/digital-negative.html)
+- [LibRaw Documentation](https://www.libraw.org/docs)
 - [Android NDK Documentation](https://developer.android.com/ndk)
 - [JNI Guide](https://developer.android.com/training/articles/perf-jni)
 
 ## Support
 
-This is a proof-of-concept project. For issues or questions:
+For issues or questions:
 1. Check the Troubleshooting section above
-2. Review Adobe DNG SDK documentation
+2. Review LibRaw and Adobe DNG SDK documentation
 3. Check Android NDK documentation for native build issues
 
 ## Acknowledgments
 
+- [raw2dng2] (https://github.com/fwibisono87/raw2dng2) the skeleton for this project
+- [LibRaw](https://www.libraw.org/) for RAW file processing
 - Adobe for the DNG SDK
+- [cJSON](https://github.com/DaveGamble/cJSON) for JSON serialization
+- Independent JPEG Group for libjpeg
 - Android Open Source Project
 - JetBrains for Kotlin
