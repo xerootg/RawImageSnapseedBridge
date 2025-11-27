@@ -123,6 +123,21 @@
         style="@style/Widget.Material3.Button.OutlinedButton"
         android:text="@string/jpeg_settings_button" />
 
+    <!-- Licenses -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@android:color/darker_gray"
+        android:layout_marginTop="16dp"
+        android:layout_marginBottom="16dp" />
+
+    <Button
+        android:id="@+id/btnLicenses"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        style="@style/Widget.Material3.Button.TonalButton"
+        android:text="@string/licenses_button" />
+
     <Button
         android:id="@+id/btnSave"
         android:layout_width="match_parent"

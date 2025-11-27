@@ -1,9 +1,6 @@
 # backlog
 ## high priority
 
-### settings window
-*) a button to a dialogue with all license credits, end of the list.
-
 ### conversion workflow (depends on settings)
 *) from the gallery tab, regenrate should be an option, and prompt the user for settings, defaulting at the app level. do not persist these values
 

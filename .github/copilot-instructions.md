@@ -1,7 +1,9 @@
 # Raw2DNG - Copilot Instructions
 
 ## Requirements for all changes made
-update this file to reflect any architectural or workflow changes made in the codebase. Ensure that all new features, classes, methods, and workflows are thoroughly documented here. Include diagrams or flowcharts if they help clarify complex processes. Maintain a clear and organized structure for easy navigation.
+Update this file to reflect any architectural or workflow changes made in the codebase. Ensure that all new features, classes, methods, and workflows are thoroughly documented here. Include diagrams or flowcharts if they help clarify complex processes. Maintain a clear and organized structure for easy navigation.
+
+Ensure all licenses are properly attributed and included in the documentation as well as the Licenses dialog in the app.
 
 ## Project Overview
 
@@ -116,7 +118,9 @@ com.raw2dng/
 ├── DNGConverter.kt           # JNI bridge to native code
 ├── ImagePreviewDialog.kt     # Fullscreen preview dialog with selection
 ├── ImagePagerAdapter.kt      # ViewPager2 adapter for preview images
-├── SettingsDialog.kt         # Settings dialog (currently empty, for future use)
+├── SettingsDialog.kt         # Main settings dialog with all app preferences
+├── JpegSettingsDialog.kt     # JPEG conversion settings (quality, chroma, optimize)
+├── LicensesDialog.kt         # Open source licenses display
 └── FullscreenImageActivity.kt # Fullscreen RAW preview
 ```
 
@@ -382,14 +386,20 @@ SettingsDialog.kt
 │   ├── When unchecked: converted files shown grayed out (35% opacity)
 │   └── Persisted via KEY_HIDE_CONVERTED (Boolean, default: true)
 │
-└── JPEG Quality Settings (button → JpegSettingsDialog)
-    ├── Quality: SeekBar 1-100 (default: 95)
-    ├── Chroma Subsampling: RadioGroup
-    │   ├── 4:4:4 - Best quality (default)
-    │   ├── 4:2:2 - Balanced
-    │   └── 4:2:0 - Smallest file
-    ├── Optimize Huffman: Checkbox (default: true)
-    └── Persisted via KEY_JPEG_QUALITY, KEY_JPEG_CHROMA, KEY_JPEG_OPTIMIZE
+├── JPEG Quality Settings (button → JpegSettingsDialog)
+│   ├── Quality: SeekBar 1-100 (default: 95)
+│   ├── Chroma Subsampling: RadioGroup
+│   │   ├── 4:4:4 - Best quality (default)
+│   │   ├── 4:2:2 - Balanced
+│   │   └── 4:2:0 - Smallest file
+│   ├── Optimize Huffman: Checkbox (default: true)
+│   └── Persisted via KEY_JPEG_QUALITY, KEY_JPEG_CHROMA, KEY_JPEG_OPTIMIZE
+│
+└── View Open Source Licenses (button → LicensesDialog)
+    ├── LibRaw (LGPL 2.1 / CDDL 1.0)
+    ├── Adobe DNG SDK (Adobe license)
+    ├── Independent JPEG Group (IJG license)
+    └── Android/Kotlin Libraries (Apache 2.0)
 
 SharedPreferences Keys:
   PREFS_NAME = "raw2dng_prefs"
@@ -474,6 +484,13 @@ When making changes, verify:
 - [ ] RAW type selection persists and filters file list correctly
 - [ ] Disabling all RAW types shows warning and prevents save
 - [ ] Changing RAW types refreshes file list on dialog dismiss
+- [ ] Hide converted images setting works (hides vs grays out)
+- [ ] Grayed out images are not selectable
+- [ ] JPEG settings dialog opens from settings
+- [ ] JPEG quality, chroma, and optimize settings persist
+- [ ] JPEG conversion uses saved settings
+- [ ] Licenses dialog opens and displays all licenses
+- [ ] Licenses dialog is scrollable
 
 ### Common Issues
 

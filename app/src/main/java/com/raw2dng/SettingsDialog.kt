@@ -120,6 +120,12 @@ class SettingsDialog : DialogFragment() {
             JpegSettingsDialog.newInstance().show(childFragmentManager, JpegSettingsDialog.TAG)
         }
         
+        // Setup licenses button
+        val btnLicenses = view.findViewById<Button>(R.id.btnLicenses)
+        btnLicenses.setOnClickListener {
+            LicensesDialog.newInstance().show(childFragmentManager, LicensesDialog.TAG)
+        }
+        
         val dialog = MaterialAlertDialogBuilder(requireContext())
             .setView(view)
             .create()

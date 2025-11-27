@@ -107,4 +107,62 @@
     <string name="jpeg_optimize_label">Optimize Huffman tables</string>
     <string name="jpeg_optimize_hint">Reduces file size slightly with no quality loss</string>
     <string name="ok">OK</string>
+    <string name="close">Close</string>
+    
+    <!-- Licenses -->
+    <string name="licenses_button">View Open Source Licenses</string>
+    <string name="licenses_title">Open Source Licenses</string>
+    
+    <string name="license_libraw_title">LibRaw</string>
+    <string name="license_libraw_text">LibRaw — RAW image decoder library
+Copyright © 2008–2024 LibRaw LLC
+
+LibRaw is dual-licensed under:
+• GNU Lesser General Public License version 2.1 (LGPL 2.1)
+• Common Development and Distribution License version 1.0 (CDDL 1.0)
+
+You may choose either license.
+
+https://www.libraw.org/</string>
+    
+    <string name="license_dng_sdk_title">Adobe DNG SDK</string>
+    <string name="license_dng_sdk_text">Adobe DNG SDK
+Copyright © 2006–2019 Adobe Systems Incorporated
+All Rights Reserved.
+
+Adobe permits you to use, modify, and distribute this software in accordance with the terms of the Adobe license agreement.
+
+https://helpx.adobe.com/camera-raw/digital-negative.html</string>
+    
+    <string name="license_ijg_title">Independent JPEG Group</string>
+    <string name="license_ijg_text">libjpeg — JPEG image codec
+Copyright © 1991–2018 Thomas G. Lane, Guido Vollbeding
+
+This software is based in part on the work of the Independent JPEG Group.
+
+Permission is granted to use, copy, modify, and distribute this software for any purpose, without fee, subject to the conditions that:
+
+1. The origin of this software must not be misrepresented.
+2. Altered source versions must be plainly marked as such.
+3. This notice may not be removed or altered from any source distribution.
+
+http://www.ijg.org/</string>
+    
+    <string name="license_android_title">Android &amp; Kotlin Libraries</string>
+    <string name="license_android_text">AndroidX Libraries, Material Components, and Kotlin
+
+Copyright © Google LLC, JetBrains s.r.o.
+
+Licensed under the Apache License, Version 2.0.
+
+You may obtain a copy of the License at:
+http://www.apache.org/licenses/LICENSE-2.0
+
+Includes:
+• AndroidX Core, AppCompat, ConstraintLayout
+• AndroidX Lifecycle, Activity, ViewPager2
+• AndroidX CardView, RecyclerView
+• Material Components for Android
+• Kotlin Standard Library
+• Kotlin Coroutines</string>
 </resources>
