@@ -3,6 +3,7 @@ package com.raw2dng
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Matrix
 import android.net.Uri
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
@@ -157,7 +158,7 @@ object ThumbnailCache {
     ): Bitmap? = withContext(Dispatchers.IO) {
         val cacheFile = getCacheFile(context, uri)
         
-        // If already cached, just load it
+        // If already cached, just load it (already rotated)
         if (cacheFile.exists()) {
             return@withContext loadCachedThumbnail(context, uri, maxSize)
         }
@@ -170,17 +171,89 @@ object ThumbnailCache {
         }
         
         // Extract thumbnail using native code
+        // Result is "flip:X" on success (where X is rotation value) or error message
         val result = DNGConverter.instance.extractThumbnail(filePath, cacheFile.absolutePath)
         
-        if (result.isEmpty()) {
-            // Success - check if we need to evict old entries
+        if (result.startsWith("flip:")) {
+            // Success - parse flip value for rotation
+            val flip = result.removePrefix("flip:").toIntOrNull() ?: 0
+            Log.d(TAG, "Successfully extracted thumbnail for: $filePath (flip=$flip)")
+            
+            // Check if we need to evict old entries
             evictIfNeeded(context)
             
-            Log.d(TAG, "Successfully extracted thumbnail for: $filePath")
+            // If rotation is needed, load full-size, rotate, and save back to cache
+            if (flip != 0) {
+                val fullBitmap = loadBitmapFullSize(cacheFile)
+                if (fullBitmap != null) {
+                    val rotated = applyRotation(fullBitmap, flip)
+                    // Save rotated bitmap back to cache
+                    saveBitmapToCache(rotated, cacheFile)
+                    // Now load with proper sampling
+                    return@withContext loadCachedThumbnail(context, uri, maxSize)
+                }
+            }
+            
             loadCachedThumbnail(context, uri, maxSize)
         } else {
             Log.e(TAG, "Failed to extract thumbnail: $result")
             null
+        }
+    }
+    
+    /**
+     * Load a bitmap at full size (for rotation)
+     */
+    private fun loadBitmapFullSize(file: File): Bitmap? {
+        return try {
+            BitmapFactory.decodeFile(file.absolutePath)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error loading bitmap for rotation", e)
+            null
+        }
+    }
+    
+    /**
+     * Save a bitmap to the cache file
+     */
+    private fun saveBitmapToCache(bitmap: Bitmap, file: File) {
+        try {
+            file.outputStream().use { out ->
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 90, out)
+            }
+            Log.d(TAG, "Saved rotated thumbnail to cache: ${file.absolutePath}")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error saving rotated bitmap", e)
+        }
+    }
+    
+    /**
+     * Apply rotation to a bitmap based on LibRaw flip value
+     * LibRaw flip values: 0=normal, 3=180°, 5=90°CCW, 6=90°CW
+     */
+    private fun applyRotation(bitmap: Bitmap, flip: Int): Bitmap {
+        val degrees = when (flip) {
+            3 -> 180f    // Rotate 180
+            5 -> 270f    // 90° CCW = 270° CW
+            6 -> 90f     // 90° CW
+            else -> return bitmap  // No rotation needed
+        }
+        
+        Log.d(TAG, "Applying rotation: $degrees degrees (flip=$flip)")
+        
+        val matrix = Matrix().apply {
+            postRotate(degrees)
+        }
+        
+        return try {
+            val rotated = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+            if (rotated != bitmap) {
+                bitmap.recycle()
+            }
+            rotated
+        } catch (e: Exception) {
+            Log.e(TAG, "Error applying rotation", e)
+            bitmap
         }
     }
     

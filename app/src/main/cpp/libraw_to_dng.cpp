@@ -214,6 +214,9 @@ static void setExifData(dng_negative& negative, const RawMetadata& meta) {
     // Software identifier
     exif->fSoftware.Set("Raw2DNG");
     
+    // Note: Orientation is handled via negative.SetBaseOrientation() in the main conversion function
+    // The DNG SDK uses dng_orientation, not EXIF orientation tag, for DNG files
+    
     // Description and artist
     if (!meta.description.empty()) {
         exif->fImageDescription.Set(meta.description.c_str());
@@ -524,6 +527,8 @@ bool convertRawToDNG(const std::string& inputPath,
         setExifData(*negative, meta);
         
         // Step 9: Handle orientation
+        // LibRaw flip: 0=normal, 3=180°, 5=90°CCW, 6=90°CW
+        LOGD("Setting orientation from flip=%d", meta.flip);
         dng_orientation orientation;
         switch (meta.flip) {
             case 0: orientation = dng_orientation::Normal(); break;

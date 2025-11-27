@@ -328,7 +328,8 @@ void LibRawReader::close() {
 
 bool LibRawReader::extractThumbnail(const std::string& inputPath,
                                     const std::string& outputPath,
-                                    std::string& errorMessage) {
+                                    std::string& errorMessage,
+                                    int* outFlip) {
     LibRaw processor;
     
     LOGD("Extracting thumbnail from: %s", inputPath.c_str());
@@ -341,6 +342,13 @@ bool LibRawReader::extractThumbnail(const std::string& inputPath,
         return false;
     }
     
+    // Get the flip value for rotation
+    int flip = processor.imgdata.sizes.flip;
+    LOGD("Image flip value: %d (0=normal, 3=180, 5=90CCW, 6=90CW)", flip);
+    if (outFlip) {
+        *outFlip = flip;
+    }
+    
     // Try to unpack embedded thumbnail
     ret = processor.unpack_thumb();
     if (ret == LIBRAW_SUCCESS) {
@@ -348,6 +356,9 @@ bool LibRawReader::extractThumbnail(const std::string& inputPath,
         LOGD("Found embedded thumbnail, format: %d, size: %d bytes",
              processor.imgdata.thumbnail.tformat,
              processor.imgdata.thumbnail.tlength);
+        
+        // Note: embedded thumbnails may or may not be pre-rotated by the camera
+        // We return the image flip value; Kotlin will apply rotation if needed
         
         ret = processor.dcraw_thumb_writer(outputPath.c_str());
         if (ret == LIBRAW_SUCCESS) {

@@ -126,9 +126,11 @@ public:
     // Static method to extract embedded thumbnail from a RAW file
     // Writes a JPEG file to outputPath
     // Returns true on success, false on failure (sets errorMessage)
+    // outFlip returns the rotation value (0=normal, 3=180°, 5=90°CCW, 6=90°CW)
     static bool extractThumbnail(const std::string& inputPath, 
                                  const std::string& outputPath,
-                                 std::string& errorMessage);
+                                 std::string& errorMessage,
+                                 int* outFlip = nullptr);
     
     // Static method to convert RAW to JPEG
     // Processes the RAW file and writes a full-resolution JPEG

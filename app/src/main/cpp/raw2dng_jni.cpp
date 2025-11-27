@@ -74,17 +74,23 @@ Java_com_raw2dng_DNGConverter_extractThumbnail(
     LOGD("JNI: Extracting thumbnail from %s to %s", inputPathStr, outputPathStr);
     
     std::string errorMessage;
+    int flip = 0;
     bool success = raw2dng::LibRawReader::extractThumbnail(
         std::string(inputPathStr),
         std::string(outputPathStr),
-        errorMessage
+        errorMessage,
+        &flip
     );
     
     env->ReleaseStringUTFChars(inputPath, inputPathStr);
     env->ReleaseStringUTFChars(outputPath, outputPathStr);
     
     if (success) {
-        return env->NewStringUTF("");  // Empty string indicates success
+        // Return flip value prefixed with "flip:" to indicate success
+        // Kotlin will parse this to apply rotation
+        char result[32];
+        snprintf(result, sizeof(result), "flip:%d", flip);
+        return env->NewStringUTF(result);
     } else {
         return env->NewStringUTF(errorMessage.c_str());
     }
