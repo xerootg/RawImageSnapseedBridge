@@ -34,6 +34,36 @@ The Docker build handles all dependencies including:
 - LibRaw library (git submodule)
 - cJSON library (git submodule)
 - libjpeg for JPEG export
+- GitVersion for semantic versioning
+
+### Versioning
+
+The project uses [GitVersion](https://gitversion.net/) for automatic semantic versioning based on Git history.
+
+**Configuration**: `GitVersion.yml`
+- Mode: ContinuousDeployment
+- Tag prefix: `v` (e.g., `v1.0.0`)
+- Branch strategies:
+  - `main`: No suffix, patch increment
+  - `develop`: `-beta` suffix
+  - `feature/*`: `-alpha` suffix
+  - `release/*`: `-rc` suffix
+  - Pull requests: `-pr.X` suffix
+
+**Creating a Release**:
+```bash
+# Tag a release (triggers version bump)
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+**Version in Code**:
+- `BuildConfig.VERSION_NAME` - Full semantic version (e.g., "1.0.0" or "1.0.1-alpha.3")
+- `BuildConfig.VERSION_CODE` - Commits since last version source (for Play Store)
+
+**Environment Variables** (for CI/CD):
+- `VERSION_NAME` - Override semantic version
+- `VERSION_CODE` - Override version code
 
 ### Cloning the Repository
 
@@ -62,6 +92,20 @@ adb install output/app-debug.apk
 ```bash
 adb uninstall com.raw2dng && adb install output/app-debug.apk
 ```
+
+### CI/CD Pipeline
+
+GitHub Actions workflow (`.github/workflows/build.yml`) automatically:
+1. Checks out code with submodules
+2. Runs GitVersion to determine version
+3. Builds Docker image with Android SDK/NDK
+4. Builds debug APK with version embedded
+5. Uploads APK as artifact (named `app-debug-{version}`)
+
+Triggers:
+- Push to `main` branch
+- Pull requests to `main`
+- Manual dispatch via GitHub Actions UI
 
 ## Application Architecture
 

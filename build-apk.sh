@@ -23,6 +23,35 @@ if [ ! -f "settings.gradle" ]; then
     exit 1
 fi
 
+# Get version from GitVersion or environment
+echo "Determining version..."
+
+# Find gitversion command (handle Docker PATH issues)
+GITVERSION_CMD=""
+if command -v dotnet-gitversion &> /dev/null; then
+    GITVERSION_CMD="dotnet-gitversion"
+elif [ -x "/root/.dotnet/tools/dotnet-gitversion" ]; then
+    GITVERSION_CMD="/root/.dotnet/tools/dotnet-gitversion"
+fi
+
+if [ -n "$VERSION_NAME" ]; then
+    echo -e "${GREEN}✓ Using provided VERSION_NAME: $VERSION_NAME${NC}"
+elif [ -n "$GITVERSION_CMD" ]; then
+    echo "Running GitVersion..."
+    GITVERSION_OUTPUT=$($GITVERSION_CMD 2>/dev/null || echo '{}')
+    export VERSION_NAME=$(echo "$GITVERSION_OUTPUT" | grep -o '"SemVer"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*: *"\([^"]*\)".*/\1/' || echo "0.1.0-local")
+    export VERSION_CODE=$(echo "$GITVERSION_OUTPUT" | grep -o '"CommitsSinceVersionSource"[[:space:]]*:[[:space:]]*[0-9]*' | head -1 | sed 's/.*: *//' || echo "1")
+    # Ensure VERSION_CODE is at least 1
+    if [ -z "$VERSION_CODE" ] || [ "$VERSION_CODE" -eq 0 ] 2>/dev/null; then
+        VERSION_CODE=1
+    fi
+    echo -e "${GREEN}✓ GitVersion: $VERSION_NAME (code: $VERSION_CODE)${NC}"
+else
+    export VERSION_NAME="0.1.0-local"
+    export VERSION_CODE="1"
+    echo -e "${YELLOW}GitVersion not found, using default: $VERSION_NAME${NC}"
+fi
+
 # Check if Adobe DNG SDK is present
 DNG_SDK_DIR="app/src/main/cpp/dng_sdk"
 DNG_SDK_FILES=$(find "$DNG_SDK_DIR" -name "dng_*.cpp" 2>/dev/null | wc -l)

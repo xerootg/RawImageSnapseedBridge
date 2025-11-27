@@ -3,6 +3,16 @@ plugins {
     id 'org.jetbrains.kotlin.android'
 }
 
+// Get version from environment variables (set by build script using GitVersion)
+def getVersionNameFromEnv() {
+    return System.getenv("VERSION_NAME") ?: project.findProperty("versionName") ?: "0.1.0-local"
+}
+
+def getVersionCodeFromEnv() {
+    def code = System.getenv("VERSION_CODE") ?: project.findProperty("versionCode") ?: "1"
+    return code.toString().toInteger()
+}
+
 android {
     namespace 'com.raw2dng'
     compileSdk 34
@@ -11,8 +21,11 @@ android {
         applicationId "com.raw2dng"
         minSdk 24
         targetSdk 34
-        versionCode 1
-        versionName "1.0"
+        versionCode getVersionCodeFromEnv()
+        versionName getVersionNameFromEnv()
+
+        // Make version available in BuildConfig
+        buildConfigField "String", "VERSION_NAME", "\"${getVersionNameFromEnv()}\""
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 
@@ -53,6 +66,7 @@ android {
 
     buildFeatures {
         viewBinding true
+        buildConfig true
     }
 }
 

@@ -1,0 +1,24 @@
+mode: ContinuousDeployment
+branches:
+  main:
+    regex: ^main$
+    label: ''
+    increment: Patch
+  develop:
+    regex: ^develop$
+    label: beta
+    increment: Minor
+  feature:
+    regex: ^feature[/-]
+    label: alpha
+    increment: Minor
+  release:
+    regex: ^release[/-]
+    label: rc
+    increment: None
+  pull-request:
+    regex: ^pull/
+    label: pr
+    increment: Inherit
+assembly-versioning-scheme: MajorMinorPatch
+tag-prefix: v

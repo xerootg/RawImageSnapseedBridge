@@ -16,6 +16,21 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
+          fetch-depth: 0  # Full history for GitVersion
+
+      - name: Install GitVersion
+        uses: gittools/actions/gitversion/setup@v3.1.1
+        with:
+          versionSpec: '6.x'
+
+      - name: Determine Version
+        id: gitversion
+        uses: gittools/actions/gitversion/execute@v3.1.1
+
+      - name: Display Version
+        run: |
+          echo "SemVer: ${{ steps.gitversion.outputs.semVer }}"
+          echo "VersionCode: ${{ steps.gitversion.outputs.commitsSinceVersionSource }}"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -32,11 +47,35 @@ jobs:
         run: docker compose build
 
       - name: Build APK
-        run: docker compose run --rm android-builder
+        run: |
+          docker compose run --rm \
+            -e VERSION_NAME=${{ steps.gitversion.outputs.semVer }} \
+            -e VERSION_CODE=${{ steps.gitversion.outputs.commitsSinceVersionSource }} \
+            android-builder
 
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug
+          name: app-debug-${{ steps.gitversion.outputs.semVer }}
           path: output/app-debug.apk
           if-no-files-found: error
+
+      - name: Create Release
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.gitversion.outputs.semVer }}
+          name: Release ${{ steps.gitversion.outputs.semVer }}
+          body: |
+            ## Raw2DNG ${{ steps.gitversion.outputs.semVer }}
+            
+            ### Installation
+            Download `app-debug.apk` and install on your Android device.
+            
+            ### Version Info
+            - Version: ${{ steps.gitversion.outputs.semVer }}
+            - Version Code: ${{ steps.gitversion.outputs.commitsSinceVersionSource }}
+            - Commit: ${{ github.sha }}
+          files: output/app-debug.apk
+          draft: false
+          prerelease: false

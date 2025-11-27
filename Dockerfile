@@ -24,6 +24,18 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
+# Install .NET SDK for GitVersion
+RUN wget https://dot.net/v1/dotnet-install.sh -O dotnet-install.sh \
+    && chmod +x dotnet-install.sh \
+    && ./dotnet-install.sh --channel 8.0 \
+    && rm dotnet-install.sh
+
+ENV DOTNET_ROOT=/root/.dotnet
+ENV PATH=${PATH}:/root/.dotnet:/root/.dotnet/tools
+
+# Install GitVersion as a .NET global tool
+RUN /root/.dotnet/dotnet tool install --global GitVersion.Tool --version 6.*
+
 # Set Java environment
 ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
 
@@ -47,6 +59,9 @@ RUN sdkmanager --install \
     "build-tools;33.0.1" \
     "ndk;${ANDROID_NDK_VERSION}" \
     "cmake;3.22.1"
+
+# Configure git to trust the workspace directory (for GitVersion)
+RUN git config --global --add safe.directory /workspace
 
 # Set working directory
 WORKDIR /workspace
