@@ -381,14 +381,16 @@ bool LibRawReader::extractThumbnail(const std::string& inputPath,
 
 bool LibRawReader::convertToJPEG(const std::string& inputPath,
                                   const std::string& outputPath,
-                                  int quality,
+                                  const JpegEncodingSettings& settings,
                                   std::string& errorMessage) {
     LibRaw processor;
     
-    LOGD("Converting RAW to JPEG: %s -> %s (quality: %d)", 
-         inputPath.c_str(), outputPath.c_str(), quality);
+    LOGD("Converting RAW to JPEG: %s -> %s (quality: %d, subsampling: %d, optimize: %d)", 
+         inputPath.c_str(), outputPath.c_str(), settings.quality, 
+         static_cast<int>(settings.subsampling), settings.optimizeCoding);
     
     // Clamp quality to valid range
+    int quality = settings.quality;
     if (quality < 1) quality = 1;
     if (quality > 100) quality = 100;
     
@@ -466,6 +468,54 @@ bool LibRawReader::convertToJPEG(const std::string& inputPath,
     jpeg_set_defaults(&cinfo);
     jpeg_set_quality(&cinfo, quality, TRUE);
     
+    // Set chroma subsampling based on settings
+    // After jpeg_set_defaults, modify comp_info for subsampling
+    switch (settings.subsampling) {
+        case ChromaSubsampling::SUBSAMP_444:
+            // No subsampling - all components at full resolution
+            cinfo.comp_info[0].h_samp_factor = 1;
+            cinfo.comp_info[0].v_samp_factor = 1;
+            cinfo.comp_info[1].h_samp_factor = 1;
+            cinfo.comp_info[1].v_samp_factor = 1;
+            cinfo.comp_info[2].h_samp_factor = 1;
+            cinfo.comp_info[2].v_samp_factor = 1;
+            LOGD("Using 4:4:4 chroma subsampling (no subsampling)");
+            break;
+        case ChromaSubsampling::SUBSAMP_422:
+            // Horizontal subsampling only
+            cinfo.comp_info[0].h_samp_factor = 2;
+            cinfo.comp_info[0].v_samp_factor = 1;
+            cinfo.comp_info[1].h_samp_factor = 1;
+            cinfo.comp_info[1].v_samp_factor = 1;
+            cinfo.comp_info[2].h_samp_factor = 1;
+            cinfo.comp_info[2].v_samp_factor = 1;
+            LOGD("Using 4:2:2 chroma subsampling");
+            break;
+        case ChromaSubsampling::SUBSAMP_420:
+        default:
+            // H and V subsampling (default from jpeg_set_defaults)
+            cinfo.comp_info[0].h_samp_factor = 2;
+            cinfo.comp_info[0].v_samp_factor = 2;
+            cinfo.comp_info[1].h_samp_factor = 1;
+            cinfo.comp_info[1].v_samp_factor = 1;
+            cinfo.comp_info[2].h_samp_factor = 1;
+            cinfo.comp_info[2].v_samp_factor = 1;
+            LOGD("Using 4:2:0 chroma subsampling");
+            break;
+    }
+    
+    // Enable Huffman table optimization if requested
+    if (settings.optimizeCoding) {
+        cinfo.optimize_coding = TRUE;
+        LOGD("Huffman table optimization enabled");
+    }
+    
+    // Enable progressive encoding if requested
+    if (settings.progressive) {
+        jpeg_simple_progression(&cinfo);
+        LOGD("Progressive JPEG enabled");
+    }
+    
     jpeg_start_compress(&cinfo, TRUE);
     
     JSAMPROW row_pointer[1];
@@ -485,6 +535,22 @@ bool LibRawReader::convertToJPEG(const std::string& inputPath,
     processor.dcraw_clear_mem(image);
     processor.recycle();
     return true;
+}
+
+// Convenience overload for JNI with individual parameters
+bool LibRawReader::convertToJPEG(const std::string& inputPath,
+                                  const std::string& outputPath,
+                                  int quality,
+                                  int chromaSubsampling,
+                                  bool optimizeCoding,
+                                  std::string& errorMessage) {
+    JpegEncodingSettings settings;
+    settings.quality = quality;
+    settings.subsampling = static_cast<ChromaSubsampling>(chromaSubsampling);
+    settings.optimizeCoding = optimizeCoding;
+    settings.progressive = false;  // Not exposed to JNI for simplicity
+    
+    return convertToJPEG(inputPath, outputPath, settings, errorMessage);
 }
 
 } // namespace raw2dng

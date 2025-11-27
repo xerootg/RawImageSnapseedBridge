@@ -173,7 +173,13 @@ class ConversionQueue(
             // Perform the conversion based on format
             val errorMessage = when (task.outputFormat) {
                 OutputFormat.DNG -> converter.convertToDNG(task.inputPath, task.outputPath)
-                OutputFormat.JPEG -> converter.convertToJPEG(task.inputPath, task.outputPath, 90)
+                OutputFormat.JPEG -> converter.convertToJPEG(
+                    task.inputPath, 
+                    task.outputPath, 
+                    DNGConverter.DEFAULT_QUALITY,
+                    DNGConverter.DEFAULT_SUBSAMPLING,
+                    DNGConverter.DEFAULT_OPTIMIZE
+                )
             }
 
             completedCount.incrementAndGet()

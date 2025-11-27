@@ -96,18 +96,23 @@ Java_com_raw2dng_DNGConverter_convertToJPEG(
         jobject /* this */,
         jstring inputPath,
         jstring outputPath,
-        jint quality) {
+        jint quality,
+        jint chromaSubsampling,
+        jboolean optimizeCoding) {
     
     const char* inputPathStr = env->GetStringUTFChars(inputPath, nullptr);
     const char* outputPathStr = env->GetStringUTFChars(outputPath, nullptr);
     
-    LOGD("JNI: Converting to JPEG %s -> %s (quality: %d)", inputPathStr, outputPathStr, quality);
+    LOGD("JNI: Converting to JPEG %s -> %s (quality: %d, subsampling: %d, optimize: %d)", 
+         inputPathStr, outputPathStr, quality, chromaSubsampling, optimizeCoding);
     
     std::string errorMessage;
     bool success = raw2dng::LibRawReader::convertToJPEG(
         std::string(inputPathStr),
         std::string(outputPathStr),
         quality,
+        chromaSubsampling,
+        optimizeCoding,
         errorMessage
     );
     

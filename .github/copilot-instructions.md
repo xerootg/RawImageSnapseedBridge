@@ -309,14 +309,42 @@ GalleryFragment.previewSelectedImages()
 7. **Gallery Preview**: Preview button in multi-select mode opens fullscreen preview with selection management
 8. **Parallel Conversion**: ConversionQueue processes files in parallel with configurable parallelism (default: 2)
 9. **Conversion Progress Grid**: Visual thumbnail grid showing per-file conversion status
-9. **Overwrite Confirmation**: Previously converted files require tap to confirm before re-conversion
-10. **Real-time Status Updates**: Conversion badges update immediately after conversion/deletion
-11. **Preview Conversion Badges**: Thumbnail strip shows D/J/D+J badges per image
-12. **Auto-Navigate to Gallery**: Optional 3-second countdown after successful conversion
-13. **Log/Thumbnail Toggle**: Switch between visual progress grid and text log during conversion
-14. **Tab Navigation Cleanup**: Conversion overlay clears when navigating away if done
-15. **Screen Rotation Handling**: State preserved via configChanges (no activity recreation)
-16. **Gallery Filter Clear Selection**: Changing gallery filter clears any active selection
+10. **Overwrite Confirmation**: Previously converted files require tap to confirm before re-conversion
+11. **Real-time Status Updates**: Conversion badges update immediately after conversion/deletion
+12. **Preview Conversion Badges**: Thumbnail strip shows D/J/D+J badges per image
+13. **Auto-Navigate to Gallery**: Optional 3-second countdown after successful conversion
+14. **Log/Thumbnail Toggle**: Switch between visual progress grid and text log during conversion
+15. **Tab Navigation Cleanup**: Conversion overlay clears when navigating away if done
+16. **Screen Rotation Handling**: State preserved via configChanges (no activity recreation)
+17. **Gallery Filter Clear Selection**: Changing gallery filter clears any active selection
+18. **High-Quality JPEG Export**: Configurable JPEG encoding with quality, chroma subsampling, and Huffman optimization
+
+### JPEG Encoding Settings
+
+JPEG export is fully parameterized from C++ through JNI to Kotlin:
+
+```
+DNGConverter.kt
+  → convertToJPEG(inputPath, outputPath, quality, chromaSubsampling, optimizeCoding)
+  → Constants:
+    - CHROMA_SUBSAMPLING_444 (0): No subsampling - best quality, largest file
+    - CHROMA_SUBSAMPLING_422 (1): Horizontal subsampling - medium quality
+    - CHROMA_SUBSAMPLING_420 (2): H+V subsampling - smallest file, most artifacts
+  → Defaults for export:
+    - quality: 95 (high quality)
+    - chromaSubsampling: 4:4:4 (no color artifacts)
+    - optimizeCoding: true (Huffman optimization)
+
+libraw_reader.cpp
+  → JpegEncodingSettings struct controls encoding
+  → Uses libjpeg with configurable:
+    - jpeg_set_quality() for quality level
+    - comp_info sampling factors for chroma subsampling
+    - optimize_coding flag for Huffman table optimization
+    - jpeg_simple_progression() for progressive JPEG (not exposed to JNI)
+```
+
+Thumbnails use `extractThumbnail()` which extracts embedded camera thumbnails (already JPEG) or falls back to PPM generation - no re-encoding needed.
 
 ### Color Matrix Handling
 
@@ -330,7 +358,7 @@ The app includes hardcoded color matrices for cameras not fully supported by Lib
 2. **ConvertedFilesHelper** checks file existence on-demand (no caching)
 3. **GalleryAdapter** supports both click (open) and long-press (multi-select)
 4. **Android 11+ (R)** uses `MediaStore.createDeleteRequest()` for file deletion (skips app confirmation, uses system dialog)
-5. **JPEG output** uses LibRaw's dcraw processing with libjpeg encoding
+5. **JPEG output** uses LibRaw's dcraw processing with libjpeg encoding at quality 95, 4:4:4 subsampling
 6. **MainActivity** holds references to both pickerFragment and galleryFragment for cross-tab communication
 7. **ThumbnailStripItem** carries conversion status (dng/jpeg booleans) for badge display
 8. **500ms delay** after deletion before refreshing Convert tab (ensures filesystem sync)
@@ -349,6 +377,7 @@ The app includes hardcoded color matrices for cameras not fully supported by Lib
 21. **Original filename for public storage**: saveToPublicStorage() uses original filename, not UUID-based cache filename
 22. **Cache cleanup**: Both input and output cache files are deleted after each conversion task completes
 23. **Gallery filter clears selection**: Changing filters calls clearSelectionOnFilterChange() to prevent stale item references
+24. **JPEG quality defaults**: 95 quality, 4:4:4 chroma (no subsampling), Huffman optimization enabled
 
 ### Testing Checklist
 
@@ -357,6 +386,7 @@ When making changes, verify:
 - [ ] Fullscreen preview works
 - [ ] DNG conversion produces valid files
 - [ ] JPEG conversion produces valid files
+- [ ] JPEG quality is high (no visible compression artifacts)
 - [ ] Gallery shows correct files per filter
 - [ ] Clear folder respects current filter
 - [ ] Conversion badges update after gallery changes
