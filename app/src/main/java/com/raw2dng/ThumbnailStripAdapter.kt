@@ -4,7 +4,6 @@ import android.graphics.Bitmap
 import android.graphics.Matrix
 import android.net.Uri
 import android.os.Build
-import android.provider.MediaStore
 import android.util.Size
 import android.view.LayoutInflater
 import android.view.View
@@ -238,27 +237,8 @@ class ThumbnailStripAdapter(
          * Android's loadThumbnail() doesn't properly apply orientation for DNG files.
          */
         private fun applyDngRotation(context: android.content.Context, bitmap: Bitmap, uri: Uri): Bitmap {
-            try {
-                // Get the file path from the URI
-                val projection = arrayOf(MediaStore.Images.Media.DATA)
-                context.contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
-                    if (cursor.moveToFirst()) {
-                        val columnIndex = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATA)
-                        val filePath = cursor.getString(columnIndex)
-                        if (filePath != null && File(filePath).exists()) {
-                            val exif = ExifInterface(filePath)
-                            val orientation = exif.getAttributeInt(
-                                ExifInterface.TAG_ORIENTATION,
-                                ExifInterface.ORIENTATION_NORMAL
-                            )
-                            return rotateBitmap(bitmap, orientation)
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                // Fall through and return original bitmap
-            }
-            return bitmap
+            val orientation = ThumbnailCache.readExifOrientation(context, uri)
+            return if (orientation == ExifInterface.ORIENTATION_NORMAL) bitmap else rotateBitmap(bitmap, orientation)
         }
         
         /**

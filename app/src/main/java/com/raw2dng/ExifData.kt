@@ -331,6 +331,27 @@ data class ExifData(
         }
         
         /**
+         * Copy the content behind [uri] into a uniquely named private temp file
+         * (two concurrent calls used to collide on a millisecond timestamp name).
+         * Returns null when the URI cannot be opened; the caller deletes the file.
+         */
+        private fun copyUriToTempFile(context: Context, uri: Uri, extension: String): File? {
+            val input = context.contentResolver.openInputStream(uri) ?: return null
+            val tempFile = File.createTempFile("exif_", ".$extension", context.cacheDir)
+            try {
+                input.use { source ->
+                    FileOutputStream(tempFile).use { output ->
+                        source.copyTo(output)
+                    }
+                }
+            } catch (e: Exception) {
+                tempFile.delete()
+                throw e
+            }
+            return tempFile
+        }
+
+        /**
          * Extract metadata from a content URI.
          * Uses the native RAW backend for RAW/DNG files and ExifInterface for JPEG.
          * 
@@ -346,40 +367,22 @@ data class ExifData(
             return try {
                 if (isRaw) {
                     // RAW/DNG file - copy to temp and use the native backend
-                    val extension = fileName.substringAfterLast('.', "raw").lowercase()
-                    val tempFile = File(context.cacheDir, "exif_temp_${System.currentTimeMillis()}.$extension")
-                    
-                    context.contentResolver.openInputStream(uri)?.use { input ->
-                        FileOutputStream(tempFile).use { output ->
-                            input.copyTo(output)
-                        }
-                    } ?: return ExifData(
-                        fileName = fileName,
-                        fileSize = fileSize,
-                        error = "Cannot open file"
-                    )
-                    
-                    val result = extractFromRaw(tempFile.absolutePath, fileName, fileSize)
-                    tempFile.delete()
-                    result
+                    val tempFile = copyUriToTempFile(context, uri, FileNames.extension(fileName, "raw"))
+                        ?: return ExifData(fileName = fileName, fileSize = fileSize, error = "Cannot open file")
+                    try {
+                        extractFromRaw(tempFile.absolutePath, fileName, fileSize)
+                    } finally {
+                        tempFile.delete()
+                    }
                 } else {
                     // JPEG or other non-RAW - copy to temp and use ExifInterface
-                    val extension = fileName.substringAfterLast('.', "jpg").lowercase()
-                    val tempFile = File(context.cacheDir, "exif_temp_${System.currentTimeMillis()}.$extension")
-                    
-                    context.contentResolver.openInputStream(uri)?.use { input ->
-                        FileOutputStream(tempFile).use { output ->
-                            input.copyTo(output)
-                        }
-                    } ?: return ExifData(
-                        fileName = fileName,
-                        fileSize = fileSize,
-                        error = "Cannot open file"
-                    )
-                    
-                    val result = extractFromNonRaw(tempFile.absolutePath, fileName, fileSize)
-                    tempFile.delete()
-                    result
+                    val tempFile = copyUriToTempFile(context, uri, FileNames.extension(fileName, "jpg"))
+                        ?: return ExifData(fileName = fileName, fileSize = fileSize, error = "Cannot open file")
+                    try {
+                        extractFromNonRaw(tempFile.absolutePath, fileName, fileSize)
+                    } finally {
+                        tempFile.delete()
+                    }
                 }
             } catch (e: Exception) {
                 android.util.Log.e(TAG, "Failed to extract from URI: ${e.message}", e)
@@ -405,26 +408,21 @@ data class ExifData(
             val isRaw = isRawFile(fileName)
             
             return try {
-                val extension = fileName.substringAfterLast('.', if (isRaw) "raw" else "jpg").lowercase()
-                val tempFile = File(context.cacheDir, "exif_temp_${System.currentTimeMillis()}.$extension")
-                
-                context.contentResolver.openInputStream(uri)?.use { input ->
-                    FileOutputStream(tempFile).use { output ->
-                        input.copyTo(output)
+                val tempFile = copyUriToTempFile(context, uri, FileNames.extension(fileName, if (isRaw) "raw" else "jpg"))
+                    ?: return "{\"error\": \"Cannot open file\"}"
+
+                val jsonStr = try {
+                    if (isRaw) {
+                        // RAW/DNG - use the native backend
+                        DNGConverter.instance.extractMetadata(tempFile.absolutePath)
+                    } else {
+                        // JPEG - build JSON from ExifInterface
+                        buildJsonFromExifInterface(tempFile.absolutePath)
                     }
-                } ?: return "{\"error\": \"Cannot open file\"}"
-                
-                val jsonStr = if (isRaw) {
-                    // RAW/DNG - use the native backend
-                    val converter = DNGConverter.instance
-                    converter.extractMetadata(tempFile.absolutePath)
-                } else {
-                    // JPEG - build JSON from ExifInterface
-                    buildJsonFromExifInterface(tempFile.absolutePath)
+                } finally {
+                    tempFile.delete()
                 }
-                
-                tempFile.delete()
-                
+
                 // Pretty print the JSON
                 try {
                     val json = JSONObject(jsonStr)
@@ -609,6 +607,12 @@ data class ExifData(
             )
         }
         
+        /** EXIF GPS coordinate as "deg/1,min/10000,sec/1000" rationals. */
+        private fun gpsRational(deg: Double, min: Double, sec: Double): String {
+            fun part(value: Double, scale: Int) = "${Math.round(kotlin.math.abs(value) * scale)}/$scale"
+            return "${part(deg, 1)},${part(min, 10000)},${part(sec, 1000)}"
+        }
+
         /**
          * Write EXIF metadata from a RAW file to a JPEG file.
          * Extracts metadata from the source RAW and writes it to the destination JPEG.
@@ -737,9 +741,10 @@ data class ExifData(
                     val lonSec = json.optDouble("gps_lon_sec", 0.0)
                     val lonRef = json.optString("gps_lon_ref", "E")
                     
-                    // Format latitude as "deg/1,min/1,sec*1000/1000"
-                    val latStr = "${latDeg.toInt()}/1,${latMin.toInt()}/1,${(latSec * 1000).toInt()}/1000"
-                    val lonStr = "${lonDeg.toInt()}/1,${lonMin.toInt()}/1,${(lonSec * 1000).toInt()}/1000"
+                    // Keep fractional minutes/seconds: truncating minutes to an integer
+                    // moved positions by up to ~1.8 km.
+                    val latStr = gpsRational(latDeg, latMin, latSec)
+                    val lonStr = gpsRational(lonDeg, lonMin, lonSec)
                     
                     exif.setAttribute(ExifInterface.TAG_GPS_LATITUDE, latStr)
                     exif.setAttribute(ExifInterface.TAG_GPS_LATITUDE_REF, latRef)

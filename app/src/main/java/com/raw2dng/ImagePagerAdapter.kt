@@ -248,14 +248,13 @@ class ImagePagerAdapter(
 
             // If we got valid dimensions, the OS can read this format
             if (imageWidth > 0 && imageHeight > 0) {
-                // Calculate sample size to avoid OutOfMemory for very large images
+                // Power-of-two sample size, rounded up so that neither edge exceeds
+                // maxDimension. BitmapFactory rounds other values down, and the old
+                // float->int truncation allowed bitmaps of up to 4x the intended size.
                 val maxDimension = 4096
                 var sampleSize = 1
-
-                if (imageWidth > maxDimension || imageHeight > maxDimension) {
-                    val widthRatio = imageWidth.toFloat() / maxDimension
-                    val heightRatio = imageHeight.toFloat() / maxDimension
-                    sampleSize = kotlin.math.max(widthRatio, heightRatio).toInt()
+                while (imageWidth / sampleSize > maxDimension || imageHeight / sampleSize > maxDimension) {
+                    sampleSize *= 2
                 }
 
                 // Load the image with the calculated sample size
@@ -281,14 +280,24 @@ class ImagePagerAdapter(
                 ThumbnailCache.extractAndCacheThumbnail(context, uri, 2048)
             }
         } catch (e: Exception) {
-            e.printStackTrace()
-            // Try native extraction as fallback
-            try {
-                ThumbnailCache.extractAndCacheThumbnail(context, uri, 2048)
-            } catch (e2: Exception) {
-                e2.printStackTrace()
-                null
-            }
+            android.util.Log.w("ImagePagerAdapter", "BitmapFactory could not decode image, trying native extraction", e)
+            fallbackToNativePreview(uri)
+        } catch (e: OutOfMemoryError) {
+            // A huge image can still exhaust the heap; the native preview is bounded.
+            android.util.Log.w("ImagePagerAdapter", "Out of memory decoding image, trying native extraction")
+            fallbackToNativePreview(uri)
+        }
+    }
+
+    private suspend fun fallbackToNativePreview(uri: Uri): Bitmap? {
+        return try {
+            ThumbnailCache.extractAndCacheThumbnail(context, uri, 2048)
+        } catch (e: Exception) {
+            android.util.Log.e("ImagePagerAdapter", "Native preview extraction failed", e)
+            null
+        } catch (e: OutOfMemoryError) {
+            android.util.Log.e("ImagePagerAdapter", "Out of memory loading native preview")
+            null
         }
     }
     
@@ -297,27 +306,8 @@ class ImagePagerAdapter(
      * BitmapFactory.decodeStream() doesn't apply EXIF orientation automatically.
      */
     private fun applyExifRotation(uri: Uri, bitmap: Bitmap): Bitmap {
-        try {
-            // Get the file path from the URI
-            val projection = arrayOf(MediaStore.Images.Media.DATA)
-            context.contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
-                if (cursor.moveToFirst()) {
-                    val columnIndex = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATA)
-                    val filePath = cursor.getString(columnIndex)
-                    if (filePath != null && File(filePath).exists()) {
-                        val exif = ExifInterface(filePath)
-                        val orientation = exif.getAttributeInt(
-                            ExifInterface.TAG_ORIENTATION,
-                            ExifInterface.ORIENTATION_NORMAL
-                        )
-                        return rotateBitmap(bitmap, orientation)
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            // Fall through and return original bitmap
-        }
-        return bitmap
+        val orientation = ThumbnailCache.readExifOrientation(context, uri)
+        return if (orientation == ExifInterface.ORIENTATION_NORMAL) bitmap else rotateBitmap(bitmap, orientation)
     }
     
     /**

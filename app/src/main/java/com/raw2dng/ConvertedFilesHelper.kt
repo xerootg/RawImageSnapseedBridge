@@ -24,7 +24,7 @@ object ConvertedFilesHelper {
      * @return true if a corresponding .dng file exists in Raw2DNG folder
      */
     fun isConvertedToDng(originalFileName: String): Boolean {
-        val baseName = originalFileName.substringBeforeLast('.')
+        val baseName = FileNames.baseName(originalFileName)
         val dngFileName = "$baseName.dng"
         return File(raw2dngDir, dngFileName).exists()
     }
@@ -35,7 +35,7 @@ object ConvertedFilesHelper {
      * @return true if a corresponding .jpg file exists in Raw2DNG/JPEG folder
      */
     fun isConvertedToJpeg(originalFileName: String): Boolean {
-        val baseName = originalFileName.substringBeforeLast('.')
+        val baseName = FileNames.baseName(originalFileName)
         val jpgFileName = "$baseName.jpg"
         return File(jpegDir, jpgFileName).exists()
     }
@@ -80,7 +80,7 @@ object ConvertedFilesHelper {
      * @return The output filename (e.g., "DSC_0001.dng" or "DSC_0001.jpg")
      */
     fun getOutputFileName(originalFileName: String, format: OutputFormat): String {
-        val baseName = originalFileName.substringBeforeLast('.')
+        val baseName = FileNames.baseName(originalFileName)
         return when (format) {
             OutputFormat.DNG -> "$baseName.dng"
             OutputFormat.JPEG -> "$baseName.jpg"
