@@ -47,6 +47,16 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-buildx-
 
+      # The Rust RAW engine (dnglab-ffi) is compiled inside the container for
+      # four ABIs; cache its target directory between runs.
+      - name: Cache cargo build output
+        uses: actions/cache@v4
+        with:
+          path: app/build/cargo-target
+          key: ${{ runner.os }}-cargo-target-${{ hashFiles('app/src/main/cpp/dnglab/Cargo.lock', '.gitmodules') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-target-
+
       - name: Build Docker image
         run: docker compose build
 

@@ -26,11 +26,13 @@ class JpegSettingsDialog : DialogFragment() {
         const val KEY_JPEG_QUALITY = "jpeg_quality"
         const val KEY_JPEG_CHROMA = "jpeg_chroma_subsampling"
         const val KEY_JPEG_OPTIMIZE = "jpeg_optimize_coding"
+        const val KEY_JPEG_EMBEDDED_POLICY = "jpeg_embedded_policy"
         
         // Defaults matching DNGConverter constants
         const val DEFAULT_QUALITY = 95
         const val DEFAULT_CHROMA = DNGConverter.CHROMA_SUBSAMPLING_444
         const val DEFAULT_OPTIMIZE = true
+        const val DEFAULT_EMBEDDED_POLICY = DNGConverter.DEFAULT_EMBEDDED_POLICY
         
         fun newInstance(): JpegSettingsDialog {
             return JpegSettingsDialog()
@@ -60,6 +62,29 @@ class JpegSettingsDialog : DialogFragment() {
             val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             return prefs.getBoolean(KEY_JPEG_OPTIMIZE, DEFAULT_OPTIMIZE)
         }
+        
+        /**
+         * Get the embedded camera JPEG policy.
+         * Returns one of DNGConverter.EMBEDDED_JPEG_NEVER / _FULL_RESOLUTION_ONLY / _ALWAYS.
+         */
+        fun getJpegEmbeddedPolicy(context: Context): Int {
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            return prefs.getInt(KEY_JPEG_EMBEDDED_POLICY, DEFAULT_EMBEDDED_POLICY)
+        }
+        
+        /** Map a policy value to the radio button id used by the JPEG settings layouts. */
+        fun embeddedPolicyToRadioId(policy: Int): Int = when (policy) {
+            DNGConverter.EMBEDDED_JPEG_ALWAYS -> R.id.radioEmbeddedAlways
+            DNGConverter.EMBEDDED_JPEG_NEVER -> R.id.radioEmbeddedNever
+            else -> R.id.radioEmbeddedFullRes
+        }
+        
+        /** Map a checked radio button id back to a policy value. */
+        fun radioIdToEmbeddedPolicy(checkedId: Int): Int = when (checkedId) {
+            R.id.radioEmbeddedAlways -> DNGConverter.EMBEDDED_JPEG_ALWAYS
+            R.id.radioEmbeddedNever -> DNGConverter.EMBEDDED_JPEG_NEVER
+            else -> DNGConverter.EMBEDDED_JPEG_FULL_RESOLUTION_ONLY
+        }
     }
     
     override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
@@ -69,6 +94,7 @@ class JpegSettingsDialog : DialogFragment() {
         val seekQuality = view.findViewById<SeekBar>(R.id.seekJpegQuality)
         val txtQualityValue = view.findViewById<TextView>(R.id.txtQualityValue)
         val radioGroupChroma = view.findViewById<RadioGroup>(R.id.radioGroupChroma)
+        val radioGroupEmbedded = view.findViewById<RadioGroup>(R.id.radioGroupEmbedded)
         val chkOptimize = view.findViewById<CheckBox>(R.id.chkOptimizeHuffman)
         val btnOk = view.findViewById<Button>(R.id.btnOk)
         
@@ -77,6 +103,8 @@ class JpegSettingsDialog : DialogFragment() {
         val currentQuality = prefs.getInt(KEY_JPEG_QUALITY, DEFAULT_QUALITY)
         val currentChroma = prefs.getInt(KEY_JPEG_CHROMA, DEFAULT_CHROMA)
         val currentOptimize = prefs.getBoolean(KEY_JPEG_OPTIMIZE, DEFAULT_OPTIMIZE)
+        val currentEmbedded = prefs.getInt(KEY_JPEG_EMBEDDED_POLICY, DEFAULT_EMBEDDED_POLICY)
+        radioGroupEmbedded.check(embeddedPolicyToRadioId(currentEmbedded))
         
         // Setup quality SeekBar
         seekQuality.progress = currentQuality
@@ -123,6 +151,7 @@ class JpegSettingsDialog : DialogFragment() {
             editor.putInt(KEY_JPEG_CHROMA, chroma)
             
             editor.putBoolean(KEY_JPEG_OPTIMIZE, chkOptimize.isChecked)
+            editor.putInt(KEY_JPEG_EMBEDDED_POLICY, radioIdToEmbeddedPolicy(radioGroupEmbedded.checkedRadioButtonId))
             
             editor.apply()
             dismiss()

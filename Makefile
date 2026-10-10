@@ -11,7 +11,7 @@ help:
 	@echo "  make clean       - Clean build artifacts"
 	@echo "  make install     - Install debug APK on connected device"
 	@echo "  make shell       - Open shell in Docker container"
-	@echo "  make setup-sdk   - Show instructions for Adobe DNG SDK setup"
+	@echo "  make setup-sdk   - Show how the RAW engine (dnglab, Rust) is set up"
 	@echo ""
 
 build:
@@ -24,6 +24,7 @@ clean:
 	rm -rf build/
 	rm -rf .gradle/
 	rm -rf output/
+	rm -rf app/src/main/cpp/dnglab/target/
 	@echo "Clean complete!"
 
 install:
@@ -40,22 +41,21 @@ shell:
 
 setup-sdk:
 	@echo ""
-	@echo "Adobe DNG SDK Setup Instructions"
-	@echo "=================================="
+	@echo "RAW engine setup (dnglab / Rust)"
+	@echo "================================="
 	@echo ""
-	@echo "1. Download Adobe DNG SDK:"
-	@echo "   https://helpx.adobe.com/camera-raw/digital-negative.html"
+	@echo "The Docker image already contains everything. For a local build:"
 	@echo ""
-	@echo "2. Extract the downloaded ZIP file"
+	@echo "1. Fetch the dnglab submodule:"
+	@echo "   git submodule update --init --recursive"
 	@echo ""
-	@echo "3. Copy SDK files to project:"
-	@echo "   cp /path/to/dng_sdk/source/*.cpp app/src/main/cpp/dng_sdk/"
-	@echo "   cp /path/to/dng_sdk/source/*.h app/src/main/cpp/dng_sdk/"
+	@echo "2. Install Rust (https://rustup.rs) and the Android targets:"
+	@echo "   rustup target add aarch64-linux-android armv7-linux-androideabi \\"
+	@echo "                     i686-linux-android x86_64-linux-android"
 	@echo ""
-	@echo "4. Verify installation:"
-	@echo "   ls -l app/src/main/cpp/dng_sdk/dng_*.cpp | wc -l"
-	@echo "   (Should show 50+ files)"
+	@echo "3. Build the app (CMake invokes cargo for every ABI):"
+	@echo "   ./gradlew assembleDebug"
 	@echo ""
-	@echo "5. Build the app:"
-	@echo "   make build"
+	@echo "To build against a dnglab checkout elsewhere:"
+	@echo "   ./gradlew assembleDebug -PdnglabSourceDir=/path/to/dnglab"
 	@echo ""

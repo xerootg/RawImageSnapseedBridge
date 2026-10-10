@@ -16,6 +16,8 @@ def getVersionCodeFromEnv() {
 android {
     namespace 'com.raw2dng'
     compileSdk 34
+    // NDK used to compile the JNI glue and to link the Rust static library (dnglab-ffi)
+    ndkVersion "25.1.8937393"
 
     // Load keystore properties for release signing
     def keystorePropertiesFile = rootProject.file("keystore.properties")
@@ -39,7 +41,14 @@ android {
         externalNativeBuild {
             cmake {
                 cppFlags "-std=c++17 -frtti -fexceptions"
-                arguments "-DANDROID_STL=c++_shared"
+                def cmakeArgs = ["-DANDROID_STL=c++_shared"]
+                // Build against a local dnglab checkout instead of the submodule:
+                //   ./gradlew assembleDebug -PdnglabSourceDir=/path/to/dnglab
+                def dnglabDir = project.findProperty("dnglabSourceDir") ?: System.getenv("DNGLAB_SOURCE_DIR")
+                if (dnglabDir) {
+                    cmakeArgs << "-DDNGLAB_SOURCE_DIR=${file(dnglabDir).absolutePath}".toString()
+                }
+                arguments cmakeArgs.toArray(new String[0])
             }
         }
 

@@ -103,6 +103,55 @@
         android:textColor="@android:color/darker_gray"
         android:layout_marginTop="4dp" />
 
+    <!-- Embedded camera JPEG policy -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@android:color/darker_gray"
+        android:layout_marginTop="16dp"
+        android:layout_marginBottom="16dp" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/jpeg_embedded_label"
+        android:textSize="16sp"
+        android:layout_marginBottom="8dp" />
+
+    <RadioGroup
+        android:id="@+id/radioGroupEmbedded"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <RadioButton
+            android:id="@+id/radioEmbeddedFullRes"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/jpeg_embedded_full_res" />
+
+        <RadioButton
+            android:id="@+id/radioEmbeddedAlways"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/jpeg_embedded_always" />
+
+        <RadioButton
+            android:id="@+id/radioEmbeddedNever"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/jpeg_embedded_never" />
+
+    </RadioGroup>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/jpeg_embedded_hint"
+        android:textSize="12sp"
+        android:textColor="@android:color/darker_gray"
+        android:layout_marginTop="4dp" />
+
     <!-- Optimize Huffman tables setting -->
     <View
         android:layout_width="match_parent"

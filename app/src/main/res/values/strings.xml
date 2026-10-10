@@ -128,6 +128,12 @@
     <string name="jpeg_chroma_hint">Subsampling reduces color resolution to shrink file size</string>
     <string name="jpeg_optimize_label">Optimize Huffman tables</string>
     <string name="jpeg_optimize_hint">Reduces file size slightly with no quality loss</string>
+    <string name="jpeg_embedded_label">Camera JPEG</string>
+    <string name="jpeg_embedded_full_res">Use embedded JPEG when it is full resolution (recommended)</string>
+    <string name="jpeg_embedded_always">Always use embedded JPEG, even if smaller</string>
+    <string name="jpeg_embedded_never">Never — always render from sensor data</string>
+    <string name="jpeg_embedded_hint">Most RAW files contain the full-size JPEG the camera rendered. Reusing it is instant and keeps the in-camera look; quality and subsampling settings only apply when rendering.</string>
+    <string name="backend_info">RAW engine: %1$s %2$s</string>
     <string name="ok">OK</string>
     <string name="cancel">Cancel</string>
     <string name="close">Close</string>
@@ -136,53 +142,28 @@
     <string name="licenses_button">View Open Source Licenses</string>
     <string name="licenses_title">Open Source Licenses</string>
     
-    <string name="license_libraw_title">LibRaw</string>
-    <string name="license_libraw_text">LibRaw — RAW image decoder library
-Copyright © 2008–2024 LibRaw LLC
+    <string name="license_dnglab_title">DNGLab / rawler</string>
+    <string name="license_dnglab_text">DNGLab and the rawler crate — camera RAW decoding and DNG authoring
+Copyright © Daniel Vogelbacher, Pedro Côrte-Real and contributors
 
-LibRaw is dual-licensed under:
-• GNU Lesser General Public License version 2.1 (LGPL 2.1)
-• Common Development and Distribution License version 1.0 (CDDL 1.0)
+Licensed under the GNU Lesser General Public License version 2.1 (LGPL-2.1).
+This app links the library statically; the corresponding source, including the dnglab-ffi bindings used here, is available at:
+https://github.com/xerootg/dnglab (fork of https://github.com/dnglab/dnglab)</string>
 
-You may choose either license.
+    <string name="license_rust_crates_title">Rust libraries</string>
+    <string name="license_rust_crates_text">The RAW engine is written in Rust and bundles the following crates, all licensed under MIT and/or Apache-2.0 unless noted:
+• image (image-rs contributors) — decoding/resizing
+• zune-jpeg (Caleb Etemesi) — JPEG decoding
+• jpeg-encoder (Volker Ströbel) — JPEG encoding; MIT/Apache-2.0 and IJG (contains code based on the Independent JPEG Group\'s libjpeg)
+• jxl-oxide — JPEG XL decoding
+• serde, serde_json, toml — data handling
+• rayon — parallelism
+• chrono — date handling
+• log, android_logger — logging
+• byteorder, bitstream-io, zerocopy, memmap2, libflate, weezl, md5, uuid, thiserror and other small utility crates
 
-https://www.libraw.org/</string>
-    
-    <string name="license_dng_sdk_title">Adobe DNG SDK</string>
-    <string name="license_dng_sdk_text">Adobe DNG SDK
-Copyright © 2006–2019 Adobe Systems Incorporated
-All Rights Reserved.
+Full license texts are available at https://crates.io for each crate.</string>
 
-Adobe permits you to use, modify, and distribute this software in accordance with the terms of the Adobe license agreement.
-
-https://helpx.adobe.com/camera-raw/digital-negative.html</string>
-    
-    <string name="license_cjson_title">cJSON</string>
-    <string name="license_cjson_text">cJSON — Ultralightweight JSON parser in ANSI C
-Copyright © 2009–2017 Dave Gamble and cJSON contributors
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the \"Software\"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED.
-
-https://github.com/DaveGamble/cJSON</string>
-    
-    <string name="license_ijg_title">Independent JPEG Group</string>
-    <string name="license_ijg_text">libjpeg — JPEG image codec
-Copyright © 1991–2018 Thomas G. Lane, Guido Vollbeding
-
-This software is based in part on the work of the Independent JPEG Group.
-
-Permission is granted to use, copy, modify, and distribute this software for any purpose, without fee, subject to the conditions that:
-
-1. The origin of this software must not be misrepresented.
-2. Altered source versions must be plainly marked as such.
-3. This notice may not be removed or altered from any source distribution.
-
-http://www.ijg.org/</string>
-    
     <string name="license_android_title">Android &amp; Kotlin Libraries</string>
     <string name="license_android_text">AndroidX Libraries, Material Components, and Kotlin
 

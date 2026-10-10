@@ -51,25 +51,13 @@ docker compose version
 
 ## Quick Start (3 Steps)
 
-### Step 1: Get Adobe DNG SDK (Required for Real Conversion)
+### Step 1: Fetch the RAW engine submodule
 
 ```bash
-# 1. Download Adobe DNG SDK from:
-#    https://helpx.adobe.com/camera-raw/digital-negative.html
-
-# 2. Extract the downloaded ZIP file
-
-# 3. Copy SDK files to project
-cd /path/to/raw2dng2
-cp /path/to/dng_sdk/source/*.cpp app/src/main/cpp/dng_sdk/
-cp /path/to/dng_sdk/source/*.h app/src/main/cpp/dng_sdk/
-
-# 4. Verify
-ls app/src/main/cpp/dng_sdk/dng_*.cpp | wc -l
-# Should show 50+ files
+git submodule update --init --recursive
 ```
 
-**Note**: You can skip this step to test the build process, but the app will only create placeholder files instead of real DNG conversions.
+The RAW engine (dnglab/rawler, Rust) is compiled inside the container; no proprietary SDK downloads are required.
 
 ### Step 2: Build the APK
 
@@ -84,7 +72,7 @@ make build
 docker-compose run --rm android-builder
 ```
 
-**First build takes 10-15 minutes** (downloading Android SDK, compiling DNG SDK). Subsequent builds are much faster (2-5 minutes).
+**First build takes 10-15 minutes** (downloading Android SDK, compiling the Rust RAW engine for four ABIs). Subsequent builds are much faster (2-5 minutes) thanks to the cached cargo target directory.
 
 ### Step 3: Get Your APK
 
@@ -136,7 +124,7 @@ make build      # Build APK
 make clean      # Clean build artifacts
 make install    # Install on connected device
 make shell      # Open shell in Docker container (for debugging)
-make setup-sdk  # Show Adobe DNG SDK setup instructions
+make setup-sdk  # Show how the RAW engine (dnglab, Rust) is set up
 make help       # Show all available commands
 ```
 
@@ -186,7 +174,7 @@ docker-compose down --rmi all
 
 2. **APK Build Process** (10-15 minutes first time, 2-5 minutes subsequent)
    - Gradle downloads dependencies (first time only)
-   - Compiles Adobe DNG SDK C++ code (if present)
+   - Compiles the dnglab-ffi Rust crate for arm64-v8a, armeabi-v7a, x86 and x86_64 (cargo, invoked by CMake)
    - Compiles JNI bridge code
    - Builds Kotlin/Java Android app code
    - Packages everything into APK
@@ -237,10 +225,8 @@ docker-compose build --no-cache
 
 ### Build Issues
 
-**"Adobe DNG SDK not found" warning**
-- This is OK for testing! The app will build but create placeholder files.
-- For real conversion, download and install the Adobe DNG SDK (see Step 1)
-
+**"dnglab-ffi not found" error**
+- The submodule is missing: run `git submodule update --init --recursive`
 **"Gradle build failed"**
 ```bash
 # Try clean build
@@ -373,9 +359,8 @@ make install
 git clone <repo-url>
 cd raw2dng2
 
-# 2. Get Adobe DNG SDK (optional but recommended)
-# Download from Adobe website
-cp /path/to/dng_sdk/source/*.{cpp,h} app/src/main/cpp/dng_sdk/
+# 2. Fetch the RAW engine submodule (dnglab)
+git submodule update --init --recursive
 
 # 3. Build APK
 make build
@@ -403,10 +388,11 @@ A: ~4-5 GB (includes Android SDK, NDK, and build tools)
 A: Yes, but you'll need to rebuild it next time (10-15 minutes). Better to keep it cached.
 
 **Q: Why is first build so slow?**
-A: Gradle downloads dependencies (~500MB) and compiles the entire DNG SDK (~50+ C++ files). This is cached for subsequent builds.
+A: Gradle downloads dependencies (~500MB) and cargo compiles the Rust RAW engine (rawler + dnglab-ffi) once per ABI. Both are cached for subsequent builds.
 
-**Q: Can I build without the Adobe DNG SDK?**
-A: Yes, the app will build successfully but will only create placeholder DNG files. For real conversion, you need the SDK.
+**Q: Can I build against my own dnglab checkout?**
+
+A: Yes: `./gradlew assembleDebug -PdnglabSourceDir=/path/to/dnglab` (inside the container the project is mounted at `/workspace`, so mount your checkout as well).
 
 **Q: Does this work on ARM Macs (M1/M2)?**
 A: Yes! Docker handles the architecture automatically.
@@ -415,7 +401,7 @@ A: Yes! Docker handles the architecture automatically.
 
 - [README.md](README.md) - Complete project documentation
 - [SETUP_INSTRUCTIONS.md](SETUP_INSTRUCTIONS.md) - Manual setup without Docker
-- [Adobe DNG SDK](https://helpx.adobe.com/camera-raw/digital-negative.html) - Download SDK
+- [dnglab](https://github.com/dnglab/dnglab) - RAW engine
 
 ## Support
 

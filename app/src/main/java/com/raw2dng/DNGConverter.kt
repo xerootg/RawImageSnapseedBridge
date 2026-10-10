@@ -63,7 +63,7 @@ class DNGConverter {
         const val DEFAULT_EMBEDDED_POLICY = EMBEDDED_JPEG_FULL_RESOLUTION_ONLY
 
         /** Longest edge used for cached previews/thumbnails. */
-        const val DEFAULT_PREVIEW_MAX_DIMENSION = 2048
+        const val DEFAULT_PREVIEW_MAX_DIMENSION = 3072
 
         /**
          * Lower-case extensions (without dot) the native backend can decode.

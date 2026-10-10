@@ -4,189 +4,104 @@ project("raw2dng")
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -frtti -fexceptions -Wno-deprecated-declarations")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -frtti -fexceptions")
 
-# Include directories
-include_directories(${CMAKE_SOURCE_DIR}/dng_sdk)
-include_directories(${CMAKE_SOURCE_DIR}/jpeglib)  # For libjpeg headers
-include_directories(${CMAKE_SOURCE_DIR})  # For JXL stub headers
-include_directories(${CMAKE_SOURCE_DIR}/LibRaw)  # LibRaw headers
-include_directories(${CMAKE_SOURCE_DIR}/LibRaw/libraw)  # LibRaw internal headers
-include_directories(${CMAKE_SOURCE_DIR}/cJSON)  # cJSON headers
-include_directories(${ANDROID_NDK}/sources/android/support/include)
-
-# Collect all DNG SDK source files
-file(GLOB DNG_SDK_SOURCES
-    "${CMAKE_SOURCE_DIR}/dng_sdk/dng_*.cpp"
-)
-
-# Exclude JXL-related files since we have qDNGUseJXL=0
-list(FILTER DNG_SDK_SOURCES EXCLUDE REGEX "dng_jxl\\.cpp$")
-
-# Exclude XMP SDK implementation since we have qDNGUseXMP=0
-list(FILTER DNG_SDK_SOURCES EXCLUDE REGEX "dng_xmp_sdk\\.cpp$")
-
-# Collect LibRaw source files
-file(GLOB_RECURSE LIBRAW_SOURCES
-    "${CMAKE_SOURCE_DIR}/LibRaw/src/*.cpp"
-)
-
-# Exclude x3f sources (Sigma X3F format - not needed and may have dependencies)
-list(FILTER LIBRAW_SOURCES EXCLUDE REGEX "x3f\\.cpp$")
-# Exclude integration glue files that require external libraries
-list(FILTER LIBRAW_SOURCES EXCLUDE REGEX "dngsdk_glue\\.cpp$")
-list(FILTER LIBRAW_SOURCES EXCLUDE REGEX "rawspeed_glue\\.cpp$")
-# Exclude placeholder files (they define stub implementations that conflict with real ones)
-list(FILTER LIBRAW_SOURCES EXCLUDE REGEX "_ph\\.cpp$")
-
-# If DNG SDK files are not present, create a dummy list to allow CMake configuration
-if(NOT DNG_SDK_SOURCES)
-    message(WARNING "Adobe DNG SDK source files not found in ${CMAKE_SOURCE_DIR}/dng_sdk/")
-    message(WARNING "Please download and extract the Adobe DNG SDK before building.")
-    message(WARNING "See app/src/main/cpp/dng_sdk/README.md for instructions.")
-    # Create a minimal dummy source to allow project configuration
-    set(DNG_SDK_SOURCES "")
+# ---------------------------------------------------------------------------
+# dnglab-ffi (Rust) - the RAW backend
+#
+# The dnglab checkout defaults to the git submodule at app/src/main/cpp/dnglab.
+# Override with -DDNGLAB_SOURCE_DIR=<path> (see app/build.gradle: the Gradle
+# property `dnglabSourceDir` is forwarded) to build against a local checkout.
+# ---------------------------------------------------------------------------
+set(DNGLAB_SOURCE_DIR "${CMAKE_SOURCE_DIR}/dnglab" CACHE PATH "Path to the dnglab repository")
+set(DNGLAB_FFI_DIR "${DNGLAB_SOURCE_DIR}/dnglab-ffi")
+if(NOT EXISTS "${DNGLAB_FFI_DIR}/Cargo.toml")
+    message(FATAL_ERROR
+        "dnglab-ffi not found at ${DNGLAB_FFI_DIR}. "
+        "Run 'git submodule update --init --recursive' or pass -DDNGLAB_SOURCE_DIR=<path to dnglab checkout>.")
 endif()
 
-# XMP SDK - using simplified stubs for now
-# In production, you'd want to include the full XMP SDK from Adobe
-add_library(xmp_stub STATIC
-    xmp_stub.cpp
-)
-
-# cJSON library for JSON serialization
-add_library(cjson STATIC
-    cJSON/cJSON.c
-)
-
-# libjpeg library
-add_library(jpeg STATIC
-    jpeglib/jcapimin.c
-    jpeglib/jcapistd.c
-    jpeglib/jdapimin.c
-    jpeglib/jdapistd.c
-    jpeglib/jcomapi.c
-    jpeglib/jcparam.c
-    jpeglib/jctrans.c
-    jpeglib/jdtrans.c
-    jpeglib/jcinit.c
-    jpeglib/jcmaster.c
-    jpeglib/jcmainct.c
-    jpeglib/jcprepct.c
-    jpeglib/jccoefct.c
-    jpeglib/jccolor.c
-    jpeglib/jcsample.c
-    jpeglib/jcdctmgr.c
-    jpeglib/jfdctint.c
-    jpeglib/jfdctfst.c
-    jpeglib/jfdctflt.c
-    jpeglib/jchuff.c
-    jpeglib/jcarith.c
-    jpeglib/jcmarker.c
-    jpeglib/jdatadst.c
-    jpeglib/jdmaster.c
-    jpeglib/jdinput.c
-    jpeglib/jdmainct.c
-    jpeglib/jdcoefct.c
-    jpeglib/jdpostct.c
-    jpeglib/jdmarker.c
-    jpeglib/jdhuff.c
-    jpeglib/jdarith.c
-    jpeglib/jddctmgr.c
-    jpeglib/jidctint.c
-    jpeglib/jidctfst.c
-    jpeglib/jidctflt.c
-    jpeglib/jdsample.c
-    jpeglib/jdcolor.c
-    jpeglib/jdmerge.c
-    jpeglib/jquant1.c
-    jpeglib/jquant2.c
-    jpeglib/jdatasrc.c
-    jpeglib/jaricom.c
-    jpeglib/jerror.c
-    jpeglib/jmemmgr.c
-    jpeglib/jutils.c
-    jpeglib/jmemansi.c
-)
-
-# DNG SDK library
-if(DNG_SDK_SOURCES)
-    add_library(dng_sdk STATIC
-        ${DNG_SDK_SOURCES}
-    )
-    target_link_libraries(dng_sdk
-        jpeg
-        xmp_stub
-        z
-        log
-    )
-    target_compile_definitions(dng_sdk PRIVATE
-        qDNGUseLibJPEG=1
-        qDNGUseXMP=0
-        qDNGUseJXL=0
-        qDNGThreadSafe=1
-        qDNGValidateTarget=1
-        qAndroid=1
-    )
+# cargo: honour $CARGO (full path to the binary), then $CARGO_HOME/bin, PATH and the usual rustup location.
+if(DEFINED ENV{CARGO} AND EXISTS "$ENV{CARGO}")
+    set(CARGO_EXECUTABLE "$ENV{CARGO}" CACHE FILEPATH "cargo executable used to build dnglab-ffi")
+else()
+    find_program(CARGO_EXECUTABLE
+        NAMES cargo
+        HINTS "$ENV{CARGO_HOME}/bin" "$ENV{HOME}/.cargo/bin" "/root/.cargo/bin" "/opt/rust/cargo/bin" "/usr/local/cargo/bin"
+        DOC "cargo executable used to build dnglab-ffi")
+endif()
+if(NOT CARGO_EXECUTABLE)
+    message(FATAL_ERROR "cargo not found. Install Rust (https://rustup.rs) and the Android targets: "
+        "rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android")
 endif()
 
-# LibRaw library
-if(LIBRAW_SOURCES)
-    add_library(raw STATIC
-        ${LIBRAW_SOURCES}
-    )
-    target_compile_definitions(raw PRIVATE
-        # Thread-safety enabled (no LIBRAW_NOTHREADS) - uses thread-local storage
-        NO_JASPER=1
-        NO_LCMS=1
-    )
-    target_include_directories(raw PRIVATE
-        ${CMAKE_SOURCE_DIR}/LibRaw
-        ${CMAKE_SOURCE_DIR}/LibRaw/libraw
-    )
-    target_link_libraries(raw
-        z
-        log
-    )
+# Rust debug builds are far too slow for image processing; always use the
+# optimized "android" profile defined in the dnglab workspace Cargo.toml.
+set(DNGLAB_CARGO_PROFILE "android")
+
+if(ANDROID_ABI STREQUAL "arm64-v8a")
+    set(DNGLAB_RUST_TRIPLE "aarch64-linux-android")
+elseif(ANDROID_ABI STREQUAL "armeabi-v7a")
+    set(DNGLAB_RUST_TRIPLE "armv7-linux-androideabi")
+elseif(ANDROID_ABI STREQUAL "x86")
+    set(DNGLAB_RUST_TRIPLE "i686-linux-android")
+elseif(ANDROID_ABI STREQUAL "x86_64")
+    set(DNGLAB_RUST_TRIPLE "x86_64-linux-android")
+else()
+    message(FATAL_ERROR "Unsupported ANDROID_ABI for dnglab-ffi: ${ANDROID_ABI}")
 endif()
 
-# Main JNI library
+# One cargo target directory shared by all ABIs (host build scripts are cached once).
+set(DNGLAB_CARGO_TARGET_DIR "${CMAKE_SOURCE_DIR}/../../../build/cargo-target" CACHE PATH "cargo target directory for dnglab-ffi")
+get_filename_component(DNGLAB_CARGO_TARGET_DIR "${DNGLAB_CARGO_TARGET_DIR}" ABSOLUTE)
+set(DNGLAB_FFI_LIB "${DNGLAB_CARGO_TARGET_DIR}/${DNGLAB_RUST_TRIPLE}/${DNGLAB_CARGO_PROFILE}/libdnglab_ffi.a")
+
+if(NOT DEFINED ANDROID_PLATFORM_LEVEL)
+    set(ANDROID_PLATFORM_LEVEL 24)
+endif()
+
+add_custom_target(dnglab_ffi_cargo
+    COMMAND ${CMAKE_COMMAND} -E env "CARGO=${CARGO_EXECUTABLE}"
+        bash "${DNGLAB_FFI_DIR}/scripts/build-android.sh"
+            --ndk "${ANDROID_NDK}"
+            --abi "${ANDROID_ABI}"
+            --api "${ANDROID_PLATFORM_LEVEL}"
+            --profile "${DNGLAB_CARGO_PROFILE}"
+            --target-dir "${DNGLAB_CARGO_TARGET_DIR}"
+            --manifest "${DNGLAB_FFI_DIR}/Cargo.toml"
+    BYPRODUCTS "${DNGLAB_FFI_LIB}"
+    WORKING_DIRECTORY "${DNGLAB_FFI_DIR}"
+    COMMENT "Building dnglab-ffi (Rust) for ${ANDROID_ABI}"
+    VERBATIM
+)
+
+add_library(dnglab_ffi STATIC IMPORTED)
+set_target_properties(dnglab_ffi PROPERTIES IMPORTED_LOCATION "${DNGLAB_FFI_LIB}")
+add_dependencies(dnglab_ffi dnglab_ffi_cargo)
+
+# ---------------------------------------------------------------------------
+# JNI library
+# ---------------------------------------------------------------------------
 add_library(${CMAKE_PROJECT_NAME} SHARED
     raw2dng_jni.cpp
-    libraw_backend.cpp
-    dng_converter.cpp
-    libraw_reader.cpp
-    libraw_to_dng.cpp
+    dnglab_backend.cpp
 )
 
-# Link libraries
-if(DNG_SDK_SOURCES)
-    target_link_libraries(${CMAKE_PROJECT_NAME}
-        dng_sdk
-        raw
-        jpeg
-        cjson
-        xmp_stub
-        android
-        log
-        z
-        jnigraphics
-    )
-else()
-    target_link_libraries(${CMAKE_PROJECT_NAME}
-        raw
-        cjson
-        android
-        log
-        z
-    )
-endif()
+target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
+    "${DNGLAB_FFI_DIR}/include"
+)
 
-target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
-    qDNGUseLibJPEG=1
-    qDNGUseXMP=0
-    qDNGUseJXL=0
-    qDNGThreadSafe=1
-    qDNGValidateTarget=1
-    qAndroid=1
+target_link_libraries(${CMAKE_PROJECT_NAME}
+    dnglab_ffi
+    android
+    log
+    dl
+    m
+)
+
+# Only export the JNI entry points: hide the thousands of Rust symbols pulled
+# in from the static library and let the linker drop unreferenced sections.
+target_link_options(${CMAKE_PROJECT_NAME} PRIVATE
+    -Wl,--exclude-libs,ALL
+    -Wl,--gc-sections
 )

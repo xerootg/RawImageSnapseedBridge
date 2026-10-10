@@ -1,12 +1,14 @@
 # Raw2DNG - Android RAW to DNG/JPEG Converter
 
-An Android application that converts proprietary RAW camera files (CR2, ARW, NEF, ORF, RAF, RW2, PEF, SRW, etc.) to Adobe DNG format and/or JPEG. It uses LibRaw for RAW file processing and the Adobe DNG SDK for DNG file creation.
+An Android application that converts proprietary RAW camera files (CR2, CR3, ARW, NEF, ORF, RAF, RW2, PEF, SRW, etc.) to Adobe DNG format and/or JPEG. RAW decoding, DNG authoring, JPEG export and metadata come from [dnglab/rawler](https://github.com/xerootg/dnglab) (Rust), embedded through a small C ABI (`dnglab-ffi`).
+
+Most RAW files carry the full-resolution JPEG the camera rendered. JPEG export reuses it directly (instant, in-camera look, fresh EXIF) whenever it is full size, and only demosaics the sensor data for formats that embed a reduced preview (Sony ARW, Panasonic RW2, older Olympus/Pentax) or when you ask for a re-render.
 
 ## Features
 
 ### Core Conversion
-- ✅ Convert RAW files to Adobe DNG format
-- ✅ Convert RAW files to high-quality JPEG
+- ✅ Convert RAW files to Adobe DNG format (lossless JPEG-92, camera profiles and lens corrections from the dnglab camera database)
+- ✅ Convert RAW files to high-quality JPEG: embedded camera JPEG passthrough or full render, configurable per conversion
 - ✅ Parallel conversion with configurable thread count (1 to N CPU cores)
 - ✅ Visual conversion progress with thumbnail grid and status overlays
 - ✅ Overwrite confirmation for already-converted files
@@ -36,7 +38,7 @@ An Android application that converts proprietary RAW camera files (CR2, ARW, NEF
 ### User Experience
 - ✅ Material 3 theming with dynamic colors
 - ✅ Three-tab interface: Convert, Gallery, Settings
-- ✅ Configurable JPEG quality, chroma subsampling, and Huffman optimization
+- ✅ Configurable JPEG quality, chroma subsampling, Huffman optimization and camera-JPEG policy
 - ✅ Hierarchical RAW format selection by manufacturer
 - ✅ Screen rotation handling with state preservation
 - ✅ Docker-based build system (no Android Studio required!)
@@ -56,18 +58,14 @@ cd raw2dng2
 # Or if already cloned, initialize submodules
 git submodule update --init --recursive
 
-# 3. (Optional) Add Adobe DNG SDK for real conversion
-# Download from: https://helpx.adobe.com/camera-raw/digital-negative.html
-# Then: cp /path/to/dng_sdk/source/*.{cpp,h} app/src/main/cpp/dng_sdk/
-
-# 4. Build the APK (one command!)
+# 3. Build the APK (one command!)
 sudo make build
 # or: ./docker-build.sh
 
-# 5. Your APK is ready!
+# 4. Your APK is ready!
 ls output/app-debug.apk
 
-# 6. Install on connected device
+# 5. Install on connected device
 adb install output/app-debug.apk
 ```
 
@@ -94,7 +92,7 @@ For detailed Docker instructions, see **[DOCKER_BUILD.md](DOCKER_BUILD.md)**.
 1. **Android Studio** (Arctic Fox or newer)
    - Download from: https://developer.android.com/studio
 
-2. **Android NDK** (r21 or newer)
+2. **Android NDK** (r25 - the project pins 25.1.8937393)
    - Install via Android Studio SDK Manager
    - Go to: Tools → SDK Manager → SDK Tools → NDK (Side by side)
 
@@ -102,43 +100,30 @@ For detailed Docker instructions, see **[DOCKER_BUILD.md](DOCKER_BUILD.md)**.
    - Install via Android Studio SDK Manager
    - Go to: Tools → SDK Manager → SDK Tools → CMake
 
-### Adobe DNG SDK
-
-**IMPORTANT**: You must download and install the Adobe DNG SDK before building this project.
-
-#### Download Instructions:
-
-1. Visit Adobe's DNG SDK page:
-   - https://helpx.adobe.com/camera-raw/digital-negative.html
-   - Or search for "Adobe DNG SDK download"
-
-2. Download the latest version (1.6 or newer recommended)
-
-3. Extract the downloaded ZIP file
-
-4. Copy SDK files to the project:
+4. **Rust** (stable, 1.88 or newer) with the Android targets
    ```bash
-   # Navigate to the extracted SDK directory
-   cd /path/to/dng_sdk_x_x/
-
-   # Copy all source files to the project
-   cp dng_sdk/source/*.cpp /path/to/raw2dng2/app/src/main/cpp/dng_sdk/
-   cp dng_sdk/source/*.h /path/to/raw2dng2/app/src/main/cpp/dng_sdk/
+   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+   rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
    ```
+   CMake runs `cargo` for every ABI and links the resulting static library into the JNI module. If `cargo` is not on the PATH Android Studio uses, set `CARGO=/path/to/cargo` in the environment or `CARGO_HOME`.
 
-   Or use the provided helper script:
-   ```bash
-   # From the project root directory
-   ./download_dng_sdk.sh
-   # Follow the instructions, download the SDK, then:
-   ./download_dng_sdk.sh --extract
-   ```
+### RAW engine (dnglab)
 
-5. Verify installation:
-   ```bash
-   ls app/src/main/cpp/dng_sdk/dng_*.cpp
-   # Should show multiple DNG SDK source files
-   ```
+The RAW engine lives in the `dnglab` git submodule (`app/src/main/cpp/dnglab`, fork of [dnglab](https://github.com/dnglab/dnglab) with the `dnglab-ffi` C ABI crate). Fetch it once:
+
+```bash
+git submodule update --init --recursive
+```
+
+To hack on both repositories side by side, point the build at any dnglab checkout:
+
+```bash
+./gradlew assembleDebug -PdnglabSourceDir=/path/to/dnglab
+# or
+DNGLAB_SOURCE_DIR=/path/to/dnglab ./gradlew assembleDebug
+```
+
+No proprietary SDKs are needed: there is nothing to download from Adobe.
 
 ## Building the Project
 
@@ -148,7 +133,7 @@ For detailed Docker instructions, see **[DOCKER_BUILD.md](DOCKER_BUILD.md)**.
 2. Select "Open an Existing Project"
 3. Navigate to the `raw2dng2` directory
 4. Wait for Gradle sync to complete
-5. Ensure the Adobe DNG SDK is installed (see above)
+5. Ensure Rust and the Android targets are installed (see above)
 6. Click "Build" → "Make Project" or press `Ctrl+F9` (Windows/Linux) or `Cmd+F9` (Mac)
 7. Connect an Android device or start an emulator
 8. Click "Run" → "Run 'app'" or press `Shift+F10`
@@ -264,8 +249,19 @@ The app uses a three-tab interface:
 - **Hide Already Converted**: Hide vs dim converted images in Convert tab
 - **Open Single DNG in Snapseed**: Auto-open after single DNG conversion
 - **Share Single JPEG**: Open share sheet after single JPEG conversion
-- **JPEG Quality Settings**: Quality (1-100), chroma subsampling, Huffman optimization
-- **View Open Source Licenses**: Attribution for LibRaw, DNG SDK, cJSON, libjpeg
+- **JPEG Quality Settings**: Quality (80-100), chroma subsampling, Huffman optimization, and the camera-JPEG policy (use embedded JPEG when full resolution / always / never)
+- **View Open Source Licenses**: Attribution for dnglab/rawler and the Rust crates it bundles
+- **RAW engine**: Shows the dnglab/rawler version compiled into the app
+
+### JPEG export: camera JPEG vs. render
+
+| Policy | Behaviour |
+|--------|-----------|
+| Use embedded JPEG when full resolution (default) | Copies the camera's JPEG when both edges are at least 90% of the sensor's default crop; otherwise renders |
+| Always use embedded JPEG | Copies whatever JPEG is embedded, even a small preview |
+| Never | Always demosaics and renders (quality/subsampling/Huffman settings apply) |
+
+The embedded JPEG keeps the in-camera look (picture style, lens corrections, noise reduction) and takes milliseconds. Rendering uses rawler's pipeline: PPG demosaic (bilinear for X-Trans), camera matrix, dcraw-style auto brightness, sRGB. Either way the JPEG receives complete EXIF (camera, lens, exposure, GPS, orientation) from the RAW. The conversion log marks passthrough files with "(camera JPEG)".
 
 ### Output Directories
 
@@ -285,23 +281,27 @@ Access files via:
 
 ## Supported RAW Formats
 
-The app uses LibRaw for RAW file reading, supporting formats organized by manufacturer:
+Decoding is done by rawler; the formats offered in Settings are filtered by what the compiled engine supports:
 
 | Manufacturer | Formats |
 |-------------|---------|
 | **Canon** | CR2, CR3, CRW |
 | **Nikon** | NEF, NRW |
-| **Sony** | ARW, SRF, SR2 |
-| **Fujifilm** | RAF |
-| **Olympus/OM System** | ORF |
-| **Panasonic/Lumix** | RW2, RAW |
+| **Sony** | ARW |
+| **Fujifilm** | RAF (incl. X-Trans) |
+| **Olympus/OM System** | ORF, ORI |
+| **Panasonic/Lumix/Leica** | RW2, RWL, RAW |
 | **Pentax** | PEF |
 | **Samsung** | SRW |
 | **Hasselblad** | 3FR, FFF |
-| **Phase One/Leaf** | IIQ |
+| **Phase One/Leaf** | IIQ, MOS |
 | **Kodak** | DCR, KDC |
 | **Epson** | ERF |
 | **Mamiya** | MEF |
+| **Minolta** | MRW |
+| **Sigma** | X3F |
+
+See [SUPPORTED_CAMERAS.md](https://github.com/dnglab/dnglab/blob/main/SUPPORTED_CAMERAS.md) in dnglab for the camera list. DNG files are also readable (metadata, previews, re-authoring).
 
 **Note**: You can enable/disable specific formats in Settings → Enabled RAW File Types.
 
@@ -310,14 +310,18 @@ The app uses LibRaw for RAW file reading, supporting formats organized by manufa
 1. **Scoped Storage**: Files created by previous app installations cannot be overwritten directly. Delete from Gallery first, then re-convert.
 2. **DNG Thumbnail Orientation**: Android's `loadThumbnail()` doesn't apply EXIF orientation for DNG files; app manually rotates.
 3. **Package Visibility**: AndroidManifest must declare Snapseed package for integration to work on Android 11+.
-4. **Camera Color Matrices**: Some newer cameras may need hardcoded color matrices for accurate colors.
+4. **Camera support**: Colour matrices, levels and crops come from the dnglab camera database; unsupported bodies need an entry there (`rawler/data/cameras/`).
+5. **Memory**: Rendering a 24-45 MP file from sensor data needs several hundred MB; keep the conversion thread count low on small devices. Embedded-JPEG passthrough uses almost nothing.
 
 ## Troubleshooting
 
 ### Build Errors
 
-**"Adobe DNG SDK source files not found"**
-- Download and install the Adobe DNG SDK as described in Prerequisites
+**"dnglab-ffi not found"**
+- Run `git submodule update --init --recursive` or pass `-PdnglabSourceDir=/path/to/dnglab`
+
+**"cargo not found" / "target may not be installed"**
+- Install Rust and run `rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android`
 
 **"NDK not configured"**
 - Install Android NDK via Android Studio SDK Manager
@@ -332,14 +336,11 @@ The app uses LibRaw for RAW file reading, supporting formats organized by manufa
 adb uninstall com.raw2dng && adb install output/app-debug.apk
 ```
 
-**Purple cast in dark images**
-- Check per-channel black level handling in `libraw_to_dng.cpp`
+**Wrong colors / brightness for a specific camera**
+- Levels and matrices live in the dnglab camera database (`rawler/data/cameras/<make>/*.toml`); `adb logcat -s dnglab` shows what the engine picked
 
-**Wrong colors on specific camera**
-- May need camera-specific color matrix in `libraw_to_dng.cpp`
-
-**Corrupt output during parallel conversion**
-- Ensure `LIBRAW_NOTHREADS` is NOT defined in CMakeLists.txt
+**"Internal decoder failure: ..."**
+- A rawler panic was caught; reproduce on a desktop with `cargo run -p dnglab-ffi --example dnglab_ffi_cli -- jpeg <file> out.jpg` and file an issue against the dnglab fork
 
 **File gets "(1)" suffix on overwrite**
 - File was created by previous app installation; delete from Gallery first
@@ -351,21 +352,16 @@ adb uninstall com.raw2dng && adb install output/app-debug.apk
 
 This project uses multiple open-source components with various licenses:
 
-- **LibRaw**: LGPL 2.1 / CDDL 1.0 dual license
-- **Adobe DNG SDK**: Adobe license (must download separately)
-- **cJSON**: MIT license
-- **libjpeg**: Independent JPEG Group license
+- **dnglab / rawler** (fork at https://github.com/xerootg/dnglab): LGPL 2.1. The engine is linked statically; the complete corresponding source, including the `dnglab-ffi` bindings, is in the submodule.
+- **Rust crates** bundled by the engine (image, zune-jpeg, jpeg-encoder, jxl-oxide, serde, rayon, chrono, ...): MIT and/or Apache 2.0 (jpeg-encoder additionally IJG)
 - **Android/Kotlin Libraries**: Apache 2.0
 
 View full license details in the app via Settings → View Open Source Licenses.
 
-**Important**: The Adobe DNG SDK has its own license agreement. You must comply with Adobe's licensing terms when using the DNG SDK.
-
 ## Resources
 
-- [Adobe DNG SDK](https://helpx.adobe.com/camera-raw/digital-negative.html)
+- [dnglab](https://github.com/dnglab/dnglab) and the [rawler crate](https://docs.rs/rawler)
 - [Adobe DNG Specification](https://helpx.adobe.com/photoshop/digital-negative.html)
-- [LibRaw Documentation](https://www.libraw.org/docs)
 - [Android NDK Documentation](https://developer.android.com/ndk)
 - [JNI Guide](https://developer.android.com/training/articles/perf-jni)
 
@@ -373,15 +369,13 @@ View full license details in the app via Settings → View Open Source Licenses.
 
 For issues or questions:
 1. Check the Troubleshooting section above
-2. Review LibRaw and Adobe DNG SDK documentation
+2. Review the dnglab documentation for decoder/camera questions
 3. Check Android NDK documentation for native build issues
 
 ## Acknowledgments
 
-- [raw2dng2] (https://github.com/fwibisono87/raw2dng2) the skeleton for this project
-- [LibRaw](https://www.libraw.org/) for RAW file processing
-- Adobe for the DNG SDK
-- [cJSON](https://github.com/DaveGamble/cJSON) for JSON serialization
-- Independent JPEG Group for libjpeg
+- [raw2dng2](https://github.com/fwibisono87/raw2dng2) the skeleton for this project
+- [dnglab](https://github.com/dnglab/dnglab) (Daniel Vogelbacher, Pedro Côrte-Real and contributors) for rawler, the RAW decoding and DNG authoring engine
+- The Rust image ecosystem (image-rs, zune-jpeg, jpeg-encoder)
 - Android Open Source Project
 - JetBrains for Kotlin

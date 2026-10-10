@@ -8,7 +8,8 @@ This is a streamlined setup guide to get you started quickly.
 - [ ] Android SDK (API 24+) installed
 - [ ] Android NDK installed (via SDK Manager)
 - [ ] CMake installed (via SDK Manager)
-- [ ] Adobe DNG SDK downloaded
+- [ ] Rust toolchain with Android targets installed
+- [ ] dnglab submodule fetched
 
 ## 5-Minute Setup
 
@@ -22,29 +23,18 @@ This is a streamlined setup guide to get you started quickly.
    - ✅ Android SDK Build-Tools
 4. Click "Apply" to install
 
-### Step 2: Download Adobe DNG SDK
+### Step 2: Install Rust and the Android targets
 
-1. Visit: https://helpx.adobe.com/camera-raw/digital-negative.html
-2. Download the Adobe DNG SDK (latest version)
-3. Extract the ZIP file
-4. Note the location of the `dng_sdk/source/` directory
-
-### Step 3: Setup DNG SDK in Project
-
-**Option A: Manual Copy**
 ```bash
-# Copy all SDK files to project
-cp /path/to/dng_sdk/source/*.cpp app/src/main/cpp/dng_sdk/
-cp /path/to/dng_sdk/source/*.h app/src/main/cpp/dng_sdk/
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
 ```
 
-**Option B: Using Helper Script**
-```bash
-# Place downloaded dng_sdk.zip in project root
-mv ~/Downloads/dng_sdk*.zip ./dng_sdk.zip
+### Step 3: Fetch the RAW engine submodule
 
-# Run extraction script
-./download_dng_sdk.sh --extract
+```bash
+git submodule update --init --recursive
+# -> app/src/main/cpp/dnglab (rawler + dnglab-ffi)
 ```
 
 ### Step 4: Open and Build Project
@@ -66,12 +56,11 @@ mv ~/Downloads/dng_sdk*.zip ./dng_sdk.zip
 
 ## Verify Installation
 
-### Check DNG SDK Installation
+### Check the RAW engine
 
 ```bash
-# From project root, verify SDK files are present
-ls -l app/src/main/cpp/dng_sdk/dng_*.cpp | wc -l
-# Should show 50+ files
+ls app/src/main/cpp/dnglab/dnglab-ffi/Cargo.toml
+cargo --version && rustup target list --installed
 ```
 
 ### Test Build
@@ -88,7 +77,7 @@ ls -l app/src/main/cpp/dng_sdk/dng_*.cpp | wc -l
 
 1. Launch the app
 2. Check the log area at bottom of screen
-3. Look for: "SDK Status: Adobe DNG SDK (version info)"
+3. Look for: "RAW engine: dnglab/rawler <version>" at the bottom of the Settings tab
 4. If you see warnings about SDK not available, review Step 3
 
 ## Quick Test
@@ -127,13 +116,12 @@ adb pull /sdcard/Android/data/com.raw2dng/files/Documents/Raw2DNG/sample.dng
 
 ## Troubleshooting Quick Fixes
 
-### "DNG SDK files not found" during build
+### "dnglab-ffi not found" during build
 
 ```bash
-# Verify SDK files are in correct location
-ls app/src/main/cpp/dng_sdk/dng_*.cpp
-
-# If empty, repeat Step 3
+git submodule update --init --recursive
+# or build against another checkout:
+./gradlew assembleDebug -PdnglabSourceDir=/path/to/dnglab
 ```
 
 ### "NDK not found"
@@ -188,8 +176,8 @@ adb logcat | grep -i raw2dng
 
 ## Build Times (Reference)
 
-- **First build**: 5-10 minutes (downloading dependencies, compiling DNG SDK)
+- **First build**: 5-10 minutes (downloading dependencies, compiling the Rust RAW engine for four ABIs)
 - **Incremental builds**: 30-60 seconds (only changed files)
 - **Clean build**: 2-5 minutes (recompiling everything)
 
-The DNG SDK compilation is the slowest part. Be patient on first build!
+The Rust compilation is the slowest part. Be patient on first build; cargo caches it under app/build/cargo-target.

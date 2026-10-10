@@ -1,16 +1,17 @@
-// libraw_backend.h
-// RawBackend implementation on top of LibRaw (decoding) and the Adobe DNG SDK
-// (DNG authoring).
+// dnglab_backend.h
+// RawBackend implementation on top of dnglab/rawler (via the dnglab-ffi C ABI).
 
-#ifndef RAW2DNG_LIBRAW_BACKEND_H
-#define RAW2DNG_LIBRAW_BACKEND_H
+#ifndef RAW2DNG_DNGLAB_BACKEND_H
+#define RAW2DNG_DNGLAB_BACKEND_H
 
 #include "raw_backend.h"
 
 namespace raw2dng {
 
-class LibRawBackend final : public RawBackend {
+class DnglabBackend final : public RawBackend {
 public:
+    DnglabBackend();
+
     std::string name() const override;
     std::string version() const override;
     std::vector<std::string> supportedExtensions() const override;
@@ -39,4 +40,4 @@ public:
 
 } // namespace raw2dng
 
-#endif // RAW2DNG_LIBRAW_BACKEND_H
+#endif // RAW2DNG_DNGLAB_BACKEND_H

@@ -11,6 +11,8 @@ services:
       - ./output:/workspace/output
       # Optional: Cache Gradle dependencies for faster rebuilds
       - gradle-cache:/root/.gradle
+      # Cache crates.io downloads and the Rust toolchain state
+      - cargo-cache:/opt/rust/cargo/registry
     environment:
       # Gradle options
       - GRADLE_OPTS=-Xmx4096m -Dorg.gradle.daemon=false
@@ -23,4 +25,6 @@ services:
 
 volumes:
   gradle-cache:
+    driver: local
+  cargo-cache:
     driver: local
