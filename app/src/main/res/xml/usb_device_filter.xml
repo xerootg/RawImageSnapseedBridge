@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- USB Still Image class (PTP, PIMA 15740): class 6, subclass 1, protocol 1.
+     Vendor-class MTP interfaces are discovered at runtime (UsbPtpTransport.findInterface)
+     because they cannot be expressed as a static filter. -->
+<resources>
+    <usb-device class="6" subclass="1" protocol="1" />
+</resources>

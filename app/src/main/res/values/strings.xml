@@ -85,6 +85,42 @@
     <string name="show_thumbnails">Thumbnails</string>
     <string name="view_gallery">View Gallery</string>
     
+    <!-- Sources -->
+    <string name="source_label">Source</string>
+    <string name="source_choose_title">Choose a source</string>
+    <string name="source_this_device">This device</string>
+    <string name="source_add_folder">Add folder or USB drive…</string>
+    <string name="source_pair_rrc">Pair with RapidRawCloud…</string>
+    <string name="source_usb_camera">%1$s (USB camera)</string>
+    <string name="source_usb_permission_needed">USB permission is needed to read the camera</string>
+    <string name="source_opening">Connecting to %1$s…</string>
+    <string name="source_open_failed">Could not open %1$s: %2$s</string>
+    <string name="source_disconnected">%1$s disconnected</string>
+    <string name="source_switched">Source: %1$s</string>
+    <string name="source_forget">Forget</string>
+    <string name="source_forget_confirm">Stop showing %1$s as a source? Converted files are kept.</string>
+    <string name="source_refresh">Refresh</string>
+    <string name="source_loading">Reading %1$s…</string>
+    <string name="source_fingerprinting">Checking %1$d of %2$d…</string>
+    <string name="source_camera_attached">Camera attached: %1$s</string>
+    <string name="source_use_camera">Use camera</string>
+    <string name="no_raw_files_in_source">No RAW files found in %1$s</string>
+
+    <!-- RapidRawCloud settings -->
+    <string name="rrc_section_label">RapidRawCloud</string>
+    <string name="rrc_not_paired">Not paired. Enter your pairing service URL to use your cloud library as a source.</string>
+    <string name="rrc_paired">Paired with bucket %1$s at %2$s</string>
+    <string name="rrc_service_hint">Pairing service URL (e.g. rrc.example.com)</string>
+    <string name="rrc_pair_button">Pair</string>
+    <string name="rrc_unpair_button">Unpair</string>
+    <string name="rrc_pairing_started">Finish signing in in the browser…</string>
+    <string name="rrc_pairing_failed">Pairing failed: %1$s</string>
+    <string name="rrc_hint">Pairing opens your identity provider in the browser and fetches the bucket coordinates and key from the pairing service. The key is stored in the Android Keystore. Raw2DNG only reads from the bucket.</string>
+    <string name="sources_section_label">Sources</string>
+    <string name="sources_folders_label">Saved folders and USB drives</string>
+    <string name="sources_no_folders">None saved. Add one from the Source menu on the Convert tab.</string>
+    <string name="sources_clear_cache">Clear fetched RAW cache (%1$s)</string>
+
     <!-- Gallery filter -->
     <string name="dng_files">DNG</string>
     <string name="jpeg_files">JPEG</string>

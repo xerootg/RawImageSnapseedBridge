@@ -1,11 +1,26 @@
 package com.raw2dng
 
 import android.Manifest
+import android.app.PendingIntent
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.hardware.usb.UsbDevice
+import android.hardware.usb.UsbManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.widget.Toast
+import androidx.lifecycle.lifecycleScope
+import com.google.android.material.snackbar.Snackbar
+import com.raw2dng.ptp.PtpSource
+import com.raw2dng.source.SourceId
+import com.raw2dng.source.SourceRegistry
+import com.raw2dng.source.UsbCameras
+import kotlinx.coroutines.launch
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -52,9 +67,129 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainTabsBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        SourceRegistry.init(this)
         setupTabs()
         setupBackNavigation()
         checkPermissions()
+        registerUsbReceivers()
+        handleUsbIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        handleUsbIntent(intent)
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        try { unregisterReceiver(usbReceiver) } catch (e: IllegalArgumentException) { /* not registered */ }
+    }
+
+    // === USB cameras (PTP/MTP) ===
+
+    private val ptpSources = HashMap<String, SourceId>()  // UsbDevice.deviceName -> registered source
+    private val connecting = HashSet<String>()
+
+    private val usbReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            val device: UsbDevice? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                intent.getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
+            } else {
+                @Suppress("DEPRECATION") intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
+            }
+            when (intent.action) {
+                ACTION_USB_PERMISSION -> {
+                    device ?: return
+                    connecting.remove(device.deviceName)
+                    if (intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)) {
+                        openPtpSource(device)
+                    } else {
+                        Toast.makeText(this@MainActivity, R.string.source_usb_permission_needed, Toast.LENGTH_SHORT).show()
+                    }
+                }
+                UsbManager.ACTION_USB_DEVICE_ATTACHED -> {
+                    device ?: return
+                    if (!com.raw2dng.ptp.UsbPtpTransport.isPtpDevice(device)) return
+                    Snackbar.make(binding.root, getString(R.string.source_camera_attached, UsbCameras.label(device)), Snackbar.LENGTH_LONG)
+                        .setAction(R.string.source_use_camera) { connectPtpDevice(device) }
+                        .show()
+                }
+                UsbManager.ACTION_USB_DEVICE_DETACHED -> {
+                    device ?: return
+                    val id = ptpSources.remove(device.deviceName) ?: return
+                    val name = SourceRegistry.get(id)?.descriptor?.displayName ?: UsbCameras.label(device)
+                    SourceRegistry.unregister(this@MainActivity, id)
+                    Toast.makeText(this@MainActivity, getString(R.string.source_disconnected, name), Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    private fun registerUsbReceivers() {
+        val filter = IntentFilter().apply {
+            addAction(ACTION_USB_PERMISSION)
+            addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED)
+            addAction(UsbManager.ACTION_USB_DEVICE_DETACHED)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            // System broadcasts and our own PendingIntent broadcast still reach a non-exported receiver.
+            registerReceiver(usbReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(usbReceiver, filter)
+        }
+    }
+
+    /** A camera plugged in while the app is closed launches us with the device in the intent. */
+    private fun handleUsbIntent(intent: Intent?) {
+        if (intent?.action != UsbManager.ACTION_USB_DEVICE_ATTACHED) return
+        val device: UsbDevice = (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            intent.getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
+        } else {
+            @Suppress("DEPRECATION") intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
+        }) ?: return
+        connectPtpDevice(device)
+    }
+
+    fun isPtpDeviceConnected(device: UsbDevice): Boolean = ptpSources.containsKey(device.deviceName)
+
+    /** Ask for USB permission if needed, then open the camera as a source and switch to it. */
+    fun connectPtpDevice(device: UsbDevice) {
+        val manager = UsbCameras.manager(this)
+        ptpSources[device.deviceName]?.let { id ->
+            SourceRegistry.setActive(this, id)
+            binding.viewPager.currentItem = 0
+            return
+        }
+        if (manager.hasPermission(device)) {
+            openPtpSource(device)
+            return
+        }
+        if (!connecting.add(device.deviceName)) return
+        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0
+        val pi = PendingIntent.getBroadcast(this, 0, Intent(ACTION_USB_PERMISSION).setPackage(packageName), flags)
+        manager.requestPermission(device, pi)
+    }
+
+    private fun openPtpSource(device: UsbDevice) {
+        if (ptpSources.containsKey(device.deviceName)) return
+        val source: PtpSource = UsbCameras.ptpSourceFor(this, device)
+        Toast.makeText(this, getString(R.string.source_opening, UsbCameras.label(device)), Toast.LENGTH_SHORT).show()
+        lifecycleScope.launch {
+            try {
+                source.open()
+                ptpSources[device.deviceName] = source.descriptor.id
+                SourceRegistry.register(source)
+                SourceRegistry.setActive(this@MainActivity, source.descriptor.id)
+                binding.viewPager.currentItem = 0
+            } catch (e: Exception) {
+                Log.e("MainActivity", "PTP open failed for ${device.deviceName}", e)
+                Toast.makeText(this@MainActivity, getString(R.string.source_open_failed, UsbCameras.label(device), e.message ?: ""), Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    fun navigateToSettings() {
+        binding.viewPager.currentItem = 2
     }
 
     private fun setupBackNavigation() {
@@ -175,6 +310,10 @@ class MainActivity : AppCompatActivity() {
         binding.viewPager.post {
             pickerFragment?.selectFilesAndStartConversion(rawUris, outputFormat, jpegQuality, jpegChroma, jpegOptimize, jpegEmbeddedPolicy)
         }
+    }
+
+    companion object {
+        private const val ACTION_USB_PERMISSION = "com.raw2dng.USB_PERMISSION"
     }
 
     private inner class TabAdapter(activity: AppCompatActivity) : FragmentStateAdapter(activity) {

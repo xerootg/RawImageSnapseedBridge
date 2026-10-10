@@ -112,6 +112,9 @@ dependencies {
     implementation 'androidx.cardview:cardview:1.0.0'
     implementation 'androidx.recyclerview:recyclerview:1.3.2'
     implementation 'androidx.exifinterface:exifinterface:1.3.7'
+    // RapidRawCloud: Keystore-backed credential storage and Custom Tabs for the OIDC pairing login
+    implementation 'androidx.security:security-crypto:1.0.0'
+    implementation 'androidx.browser:browser:1.7.0'
 
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.1.5'

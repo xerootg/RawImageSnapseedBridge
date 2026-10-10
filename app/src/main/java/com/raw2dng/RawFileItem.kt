@@ -1,9 +1,14 @@
 package com.raw2dng
 
 import android.net.Uri
+import com.raw2dng.source.RawEntry
 
 /**
  * Data class representing a RAW image file in the picker.
+ *
+ * [uri] is how the bytes are read (MediaStore, SAF document, or the app's own
+ * source provider); [entry] is the source entry it came from and [fingerprint]
+ * its identity in the conversion ledger.
  */
 data class RawFileItem(
     val uri: Uri,
@@ -14,7 +19,9 @@ data class RawFileItem(
     var isConvertedToDng: Boolean,
     var isConvertedToJpeg: Boolean,
     var isSelected: Boolean = false,
-    var isDimmed: Boolean = false  // True when item is shown grayed out (already converted in current filter mode)
+    var isDimmed: Boolean = false,  // True when item is shown grayed out (already converted in current filter mode)
+    val entry: RawEntry? = null,
+    val fingerprint: String? = null
 ) {
     /**
      * Get the base name without extension.

@@ -847,6 +847,8 @@ class GalleryFragment : Fragment() {
     }
     
     private suspend fun findOriginalRaw(baseName: String): Uri? = withContext(Dispatchers.IO) {
+        // The ledger knows which source entry produced this output; use it when that source is reachable.
+        findOriginalViaLedger(baseName)?.let { return@withContext it }
         val contentResolver = requireContext().contentResolver
         val rawExtensions = SettingsFragment.getEnabledRawTypes(requireContext())
         
@@ -906,6 +908,26 @@ class GalleryFragment : Fragment() {
         null
     }
     
+    /**
+     * Resolve the RAW behind an output through the conversion ledger. Returns
+     * null when nothing was recorded or the recording source is not currently
+     * available (camera unplugged, folder forgotten), in which case the
+     * name-based MediaStore search runs.
+     */
+    private suspend fun findOriginalViaLedger(baseName: String): Uri? {
+        val context = requireContext().applicationContext
+        val ledger = com.raw2dng.ledger.ConversionLedger.get(context)
+        val candidates = OutputFormat.values().flatMap { ledger.outputsNamed(ConvertedFilesHelper.getOutputFileName("$baseName.x", it)) }
+        for (rec in candidates) {
+            val sourceId = rec.source ?: continue
+            val source = com.raw2dng.source.SourceRegistry.get(sourceId) ?: continue
+            val ref = rec.sourceRef ?: continue
+            val entry = try { source.lookup(ref) } catch (e: Exception) { null } ?: continue
+            return entry.contentUri
+        }
+        return null
+    }
+
     private fun saveToPublicStorage(sourceFile: File, format: OutputFormat, fileName: String) {
         val context = requireContext()
         

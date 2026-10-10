@@ -10,7 +10,45 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent">
 
-        <!-- Header row with filter chips and settings button -->
+        <!-- Source row: which library/camera/bucket the list below comes from -->
+        <LinearLayout
+            android:id="@+id/sourceRow"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingStart="8dp"
+            android:paddingEnd="4dp"
+            android:paddingTop="8dp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnSource"
+                style="@style/Widget.Material3.Button.TonalButton"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:ellipsize="middle"
+                android:maxLines="1"
+                android:textSize="12sp"
+                android:text="@string/source_this_device"
+                app:icon="@drawable/ic_expand_more"
+                app:iconGravity="end" />
+
+            <ImageButton
+                android:id="@+id/btnSourceRefresh"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginStart="4dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/source_refresh"
+                android:src="@drawable/ic_refresh" />
+
+        </LinearLayout>
+
+        <!-- Header row with filter chips -->
         <LinearLayout
             android:id="@+id/headerRow"
             android:layout_width="0dp"
@@ -19,11 +57,11 @@
             android:gravity="center_vertical"
             android:paddingStart="8dp"
             android:paddingEnd="4dp"
-            android:paddingTop="8dp"
+            android:paddingTop="4dp"
             android:paddingBottom="8dp"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent">
+            app:layout_constraintTop_toBottomOf="@id/sourceRow">
 
             <LinearLayout
                 android:id="@+id/filterChips"

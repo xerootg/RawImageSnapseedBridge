@@ -15,8 +15,20 @@ import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
+import com.raw2dng.ledger.ConversionLedger
+import com.raw2dng.ledger.RawFingerprint
+import com.raw2dng.rrc.RrcConfig
+import com.raw2dng.source.DeviceMediaSource
+import com.raw2dng.source.DocumentTreeSource
+import com.raw2dng.source.RawEntry
+import com.raw2dng.source.RawSource
+import com.raw2dng.source.SourceKind
+import com.raw2dng.source.SourceRegistry
+import com.raw2dng.source.UsbCameras
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -44,6 +56,31 @@ class RawFilePickerFragment : Fragment() {
     private var lastConversionFormat: OutputFormat = OutputFormat.DNG
 
     private val tag = "RawFilePicker"
+
+    // Sources: where the list comes from (device library, USB camera, folder, cloud)
+    private var currentSource: RawSource? = null
+    private var loadJob: Job? = null
+    private val ledger: ConversionLedger by lazy { ConversionLedger.get(requireContext().applicationContext) }
+    private val sourceListener = object : SourceRegistry.Listener {
+        override fun onSourcesChanged() {
+            if (_binding == null) return
+            val active = SourceRegistry.active()
+            binding.btnSource.text = active?.descriptor?.displayName ?: getString(R.string.source_this_device)
+            if (active != null && active.descriptor.id != currentSource?.descriptor?.id) {
+                loadRawFiles()
+            }
+        }
+    }
+    private val openTreeLauncher = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { treeUri ->
+        if (treeUri == null) return@registerForActivityResult
+        try {
+            requireContext().contentResolver.takePersistableUriPermission(treeUri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        } catch (e: SecurityException) {
+            Log.w(tag, "Could not persist permission for $treeUri", e)
+        }
+        val source = SourceRegistry.addDocumentTree(requireContext(), treeUri)
+        SourceRegistry.setActive(requireContext(), source.descriptor.id)
+    }
     
     // Auto-navigate countdown
     private var countdownJob: Job? = null
@@ -97,14 +134,17 @@ class RawFilePickerFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        SourceRegistry.init(requireContext())
         setupUI()
+        SourceRegistry.addListener(sourceListener)
         loadRawFiles()
     }
 
     override fun onResume() {
         super.onResume()
-        // Check if permissions changed since last check
-        val hasPermissions = hasRequiredPermissions()
+        val deviceSource = (SourceRegistry.active()?.descriptor?.id?.kind ?: SourceKind.DEVICE_MEDIA) == SourceKind.DEVICE_MEDIA
+        // Check if permissions changed since last check (only the device library needs them)
+        val hasPermissions = !deviceSource || hasRequiredPermissions()
         if (hasPermissions && !hadPermissionsLastCheck && allRawFiles.isEmpty()) {
             // Permissions were just granted, reload files
             Log.d(tag, "Permissions granted, reloading files")
@@ -129,12 +169,14 @@ class RawFilePickerFragment : Fragment() {
         
         viewLifecycleOwner.lifecycleScope.launch {
             var changed = false
+            val appContext = requireContext().applicationContext
             withContext(Dispatchers.IO) {
                 allRawFiles.forEach { item ->
                     val wasDng = item.isConvertedToDng
                     val wasJpeg = item.isConvertedToJpeg
-                    item.isConvertedToDng = ConvertedFilesHelper.isConvertedToDng(item.name)
-                    item.isConvertedToJpeg = ConvertedFilesHelper.isConvertedToJpeg(item.name)
+                    val status = conversionStatus(appContext, item.entry, item.fingerprint, item.name)
+                    item.isConvertedToDng = OutputFormat.DNG in status
+                    item.isConvertedToJpeg = OutputFormat.JPEG in status
                     if (wasDng != item.isConvertedToDng || wasJpeg != item.isConvertedToJpeg) {
                         changed = true
                         Log.d(tag, "Conversion status changed for ${item.name}: DNG=$wasDng->${item.isConvertedToDng}, JPEG=$wasJpeg->${item.isConvertedToJpeg}")
@@ -228,7 +270,35 @@ class RawFilePickerFragment : Fragment() {
         }
     }
 
+    /**
+     * Ledger first; outputs that predate the ledger (matched by name in the
+     * output folder) are adopted into it so the next check is a DB lookup.
+     */
+    private fun conversionStatus(context: Context, entry: RawEntry?, fingerprint: String?, name: String): Set<OutputFormat> {
+        val status = HashSet<OutputFormat>()
+        if (fingerprint != null) status.addAll(ledger.statusOf(context, fingerprint))
+        for (format in OutputFormat.values()) {
+            if (format in status) continue
+            val legacy = when (format) {
+                OutputFormat.DNG -> ConvertedFilesHelper.isConvertedToDng(name)
+                OutputFormat.JPEG -> ConvertedFilesHelper.isConvertedToJpeg(name)
+            }
+            if (!legacy) continue
+            status.add(format)
+            if (entry != null && fingerprint != null) {
+                ConvertedFilesHelper.findOutputUri(context, name, format)?.let { uri ->
+                    ledger.record(entry, fingerprint, format, uri, ConvertedFilesHelper.getOutputFileName(name, format))
+                }
+            }
+        }
+        return status
+    }
+
     private fun setupUI() {
+        binding.btnSource.text = SourceRegistry.active()?.descriptor?.displayName ?: getString(R.string.source_this_device)
+        binding.btnSource.setOnClickListener { showSourceChooser() }
+        binding.btnSourceRefresh.setOnClickListener { loadRawFiles() }
+
         adapter = RawFileAdapter(
             onSelectionToggle = { item ->
                 adapter.toggleSelection(item)
@@ -359,99 +429,184 @@ class RawFilePickerFragment : Fragment() {
     }
 
     private fun loadRawFiles() {
-        // Check permissions first
-        val hasPermissions = hasRequiredPermissions()
-        hadPermissionsLastCheck = hasPermissions
+        val source = SourceRegistry.active() ?: return
+        currentSource = source
+        binding.btnSource.text = source.descriptor.displayName
 
-        if (!hasPermissions) {
-            binding.loadingProgress.visibility = View.GONE
-            binding.emptyText.text = getString(R.string.permission_required)
-            binding.emptyText.visibility = View.VISIBLE
-            binding.rawFilesRecycler.visibility = View.GONE
-            Log.d(tag, "Storage permission not granted")
-            return
+        if (source.descriptor.id.kind == SourceKind.DEVICE_MEDIA) {
+            // Only the device library needs the storage permission
+            val hasPermissions = hasRequiredPermissions()
+            hadPermissionsLastCheck = hasPermissions
+            if (!hasPermissions) {
+                binding.loadingProgress.visibility = View.GONE
+                binding.emptyText.text = getString(R.string.permission_required)
+                binding.emptyText.visibility = View.VISIBLE
+                binding.rawFilesRecycler.visibility = View.GONE
+                Log.d(tag, "Storage permission not granted")
+                return
+            }
+        } else {
+            hadPermissionsLastCheck = true
         }
 
         binding.loadingProgress.visibility = View.VISIBLE
         binding.emptyText.visibility = View.GONE
         binding.rawFilesRecycler.visibility = View.GONE
+        binding.selectionCount.text = getString(R.string.source_loading, source.descriptor.displayName)
 
-        lifecycleScope.launch {
-            val files = withContext(Dispatchers.IO) {
-                queryRawFiles()
+        loadJob?.cancel()
+        loadJob = viewLifecycleOwner.lifecycleScope.launch {
+            val appContext = requireContext().applicationContext
+            val result = runCatching {
+                withContext(Dispatchers.IO) { enumerateSource(appContext, source) }
+            }
+            if (_binding == null || currentSource !== source) return@launch
+
+            binding.loadingProgress.visibility = View.GONE
+            val files = result.getOrElse { e ->
+                Log.e(tag, "Loading ${source.descriptor.id} failed", e)
+                allRawFiles.clear()
+                adapter.submitList(emptyList())
+                binding.emptyText.text = getString(R.string.source_open_failed, source.descriptor.displayName, e.message ?: e.javaClass.simpleName)
+                binding.emptyText.visibility = View.VISIBLE
+                binding.rawFilesRecycler.visibility = View.GONE
+                binding.selectionCount.text = ""
+                return@launch
             }
 
             allRawFiles.clear()
             allRawFiles.addAll(files)
 
-            binding.loadingProgress.visibility = View.GONE
-
             if (files.isEmpty()) {
-                binding.emptyText.text = getString(R.string.no_raw_files_found)
+                binding.emptyText.text = getString(R.string.no_raw_files_in_source, source.descriptor.displayName)
                 binding.emptyText.visibility = View.VISIBLE
                 binding.rawFilesRecycler.visibility = View.GONE
+                binding.selectionCount.text = ""
             } else {
                 binding.emptyText.visibility = View.GONE
                 binding.rawFilesRecycler.visibility = View.VISIBLE
                 applyFilter()
             }
+            // The source may have learned its real name (camera model) while opening
+            binding.btnSource.text = source.descriptor.displayName
 
-            Log.d(tag, "Loaded ${files.size} RAW files")
+            Log.d(tag, "Loaded ${files.size} RAW files from ${source.descriptor.id}")
         }
     }
 
-    private fun queryRawFiles(): List<RawFileItem> {
-        val files = mutableListOf<RawFileItem>()
-
-        val projection = arrayOf(
-            MediaStore.Images.Media._ID,
-            MediaStore.Images.Media.DISPLAY_NAME,
-            MediaStore.Images.Media.SIZE,
-            MediaStore.Images.Media.DATE_MODIFIED
-        )
-
-        val sortOrder = "${MediaStore.Images.Media.DATE_MODIFIED} DESC"
-
-        val cursor: Cursor? = requireContext().contentResolver.query(
-            MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-            projection,
-            null,
-            null,
-            sortOrder
-        )
-
-        cursor?.use {
-            val idColumn = it.getColumnIndexOrThrow(MediaStore.Images.Media._ID)
-            val nameColumn = it.getColumnIndexOrThrow(MediaStore.Images.Media.DISPLAY_NAME)
-            val sizeColumn = it.getColumnIndexOrThrow(MediaStore.Images.Media.SIZE)
-            val dateColumn = it.getColumnIndexOrThrow(MediaStore.Images.Media.DATE_MODIFIED)
-
-            val enabledExtensions = getEnabledRawExtensions()
-            
-            while (it.moveToNext()) {
-                val id = it.getLong(idColumn)
-                val name = it.getString(nameColumn) ?: continue
-                val size = it.getLong(sizeColumn)
-                val date = it.getLong(dateColumn)
-
-                // Check if it's a RAW file by extension
-                val ext = name.substringAfterLast('.', "").lowercase(Locale.getDefault())
-                if (ext !in enabledExtensions) continue
-
-                val uri = android.content.ContentUris.withAppendedId(
-                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                    id
-                )
-
-                val isConvertedToDng = ConvertedFilesHelper.isConvertedToDng(name)
-                val isConvertedToJpeg = ConvertedFilesHelper.isConvertedToJpeg(name)
-
-                files.add(RawFileItem(uri, name, size, date, "", isConvertedToDng, isConvertedToJpeg))
+    /**
+     * Open the source, list its RAW objects, fingerprint them (cached in the
+     * ledger after the first time) and resolve their conversion status.
+     */
+    private suspend fun enumerateSource(context: Context, source: RawSource): List<RawFileItem> {
+        source.open()
+        val entries = source.enumerate(getEnabledRawExtensions())
+        val items = ArrayList<RawFileItem>(entries.size)
+        var uncached = 0
+        entries.forEachIndexed { index, entry ->
+            val resolvedFp: String = ledger.cachedFingerprint(entry) ?: run {
+                uncached++
+                if (uncached % 25 == 1) {
+                    withContext(Dispatchers.Main) {
+                        if (_binding != null) binding.selectionCount.text = getString(R.string.source_fingerprinting, index + 1, entries.size)
+                    }
+                }
+                val computed = try {
+                    RawFingerprint.compute(source, entry)
+                } catch (e: Exception) {
+                    Log.w(tag, "Fingerprint failed for ${entry.name}: ${e.message}")
+                    RawFingerprint.ofMetadata(entry)
+                }
+                ledger.rememberFingerprint(entry, computed)
+                computed
             }
+            val status = conversionStatus(context, entry, resolvedFp, entry.name)
+            items.add(
+                RawFileItem(
+                    uri = entry.contentUri, name = entry.name, size = entry.size, dateModified = entry.modifiedEpochSec,
+                    path = entry.folder,
+                    isConvertedToDng = OutputFormat.DNG in status, isConvertedToJpeg = OutputFormat.JPEG in status,
+                    entry = entry, fingerprint = resolvedFp
+                )
+            )
+        }
+        return items
+    }
+
+    // === Source selection ===
+
+    private fun showSourceChooser() {
+        val context = requireContext()
+        data class Choice(val label: String, val action: () -> Unit)
+        val choices = ArrayList<Choice>()
+        val activeId = SourceRegistry.activeId
+
+        for (source in SourceRegistry.all()) {
+            val d = source.descriptor
+            val marker = if (d.id == activeId) "✓ " else ""
+            val detail = if (d.detail.isNotEmpty()) "\n${d.detail}" else ""
+            choices.add(Choice("$marker${d.displayName}$detail") { SourceRegistry.setActive(context, d.id) })
+        }
+        // Cameras that are plugged in but not connected yet
+        val registeredUsb = SourceRegistry.all().map { it.descriptor.id }.toSet()
+        for (device in UsbCameras.attachedPtpDevices(context)) {
+            val provisional = com.raw2dng.source.SourceId(SourceKind.PTP, UsbCameras.provisionalInstance(device))
+            if (provisional in registeredUsb) continue
+            val attached = (activity as? MainActivity)?.isPtpDeviceConnected(device) == true
+            if (attached) continue
+            choices.add(Choice(getString(R.string.source_usb_camera, UsbCameras.label(device))) {
+                (activity as? MainActivity)?.connectPtpDevice(device)
+            })
+        }
+        choices.add(Choice(getString(R.string.source_add_folder)) { openFolderPicker() })
+        if (RrcConfig.load(context) == null) {
+            choices.add(Choice(getString(R.string.source_pair_rrc)) { (activity as? MainActivity)?.navigateToSettings() })
         }
 
-        return files
+        AlertDialog.Builder(context)
+            .setTitle(R.string.source_choose_title)
+            .setItems(choices.map { it.label }.toTypedArray()) { _, which -> choices[which].action() }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
     }
+
+    private fun openFolderPicker() {
+        val context = requireContext()
+        val volumes = UsbCameras.removableVolumes(context)
+        if (volumes.isEmpty() || Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            openTreeLauncher.launch(null)
+            return
+        }
+        // Offer the mounted removable volumes (USB drive, SD card) first, then "anywhere"
+        val labels = volumes.map { (it.getDescription(context) as String?) ?: "Removable volume" } + getString(R.string.source_add_folder)
+        AlertDialog.Builder(context)
+            .setTitle(R.string.source_add_folder)
+            .setItems(labels.toTypedArray()) { _, which ->
+                if (which < volumes.size) {
+                    try {
+                        startActivityForTree(UsbCameras.openTreeIntent(volumes[which]))
+                    } catch (e: Exception) {
+                        openTreeLauncher.launch(null)
+                    }
+                } else {
+                    openTreeLauncher.launch(null)
+                }
+            }
+            .show()
+    }
+
+    private val openVolumeTreeLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val treeUri = result.data?.data ?: return@registerForActivityResult
+        try {
+            requireContext().contentResolver.takePersistableUriPermission(treeUri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        } catch (e: SecurityException) {
+            Log.w(tag, "Could not persist permission for $treeUri", e)
+        }
+        val source = SourceRegistry.addDocumentTree(requireContext(), treeUri)
+        SourceRegistry.setActive(requireContext(), source.descriptor.id)
+    }
+
+    private fun startActivityForTree(intent: android.content.Intent) = openVolumeTreeLauncher.launch(intent)
 
     private fun getFilteredFiles(): List<RawFileItem> {
         val hideConverted = SettingsFragment.getHideConverted(requireContext())
@@ -739,6 +894,14 @@ class RawFilePickerFragment : Fragment() {
                         
                         val saveResult = saveToPublicStorage(outputFile, result.task.outputFormat, publicFileName)
                         outputFile.delete()
+                        if (saveResult !is SaveResult.Failed) {
+                            val savedUri = when (saveResult) {
+                                is SaveResult.Success -> saveResult.uri
+                                is SaveResult.SuccessWithWarning -> saveResult.uri
+                                else -> null
+                            }
+                            recordConversion(uriToRawFile[result.task.inputUri], inputFile, result.task.outputFormat, savedUri, publicFileName)
+                        }
                         inputFile.delete()  // Clean up cached input file
                         
                         when (saveResult) {
@@ -897,6 +1060,29 @@ class RawFilePickerFragment : Fragment() {
         conversionQueue?.start()
     }
     
+    /**
+     * Write a successful conversion to the ledger. Must run before the cached
+     * input is deleted: a metadata-only fingerprint (source without range
+     * reads) is upgraded to a content fingerprint from the full file here.
+     */
+    private fun recordConversion(rawFile: RawFileItem?, inputFile: File, format: OutputFormat, outputUri: Uri?, outputName: String) {
+        val entry = rawFile?.entry ?: return
+        val fp = rawFile.fingerprint ?: return
+        if (outputUri == null) return
+        val contentFp = if (!RawFingerprint.isContent(fp) && inputFile.exists()) {
+            runCatching { RawFingerprint.ofFile(inputFile) }.getOrNull()
+        } else null
+        val appContext = requireContext().applicationContext
+        viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                if (contentFp != null) ledger.addAlias(fp, contentFp)
+                ledger.record(entry, contentFp ?: fp, format, outputUri, outputName)
+            } catch (e: Exception) {
+                Log.e(tag, "Ledger write failed for ${entry.name}", e)
+            }
+        }
+    }
+
     /**
      * Update the conversion status of a specific item after successful conversion.
      * This provides immediate feedback without requiring a full file reload.
@@ -1203,6 +1389,8 @@ class RawFilePickerFragment : Fragment() {
 
     override fun onDestroyView() {
         super.onDestroyView()
+        SourceRegistry.removeListener(sourceListener)
+        loadJob?.cancel()
         conversionQueue?.cancel()
         cancelCountdown()
         _binding = null

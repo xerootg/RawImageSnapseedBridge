@@ -9,8 +9,18 @@ import android.widget.Button
 import android.widget.CheckBox
 import android.widget.SeekBar
 import android.widget.TextView
+import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.lifecycleScope
+import com.raw2dng.rrc.RrcConfig
+import com.raw2dng.rrc.RrcPairing
+import com.raw2dng.source.DocumentTreeSource
+import com.raw2dng.source.SourceFetchCache
+import com.raw2dng.source.SourceRegistry
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Settings fragment for app configuration.
@@ -26,6 +36,7 @@ class SettingsFragment : Fragment() {
         const val KEY_OPEN_IN_SNAPSEED = "open_single_dng_in_snapseed"
         const val KEY_SHARE_SINGLE_JPEG = "share_single_jpeg_on_completion"
         const val KEY_CONVERSION_PARALLELISM = "conversion_parallelism"
+        const val KEY_RRC_SERVICE = "rrc_pairing_service"
         const val DEFAULT_TIMEOUT = 3
         const val DEFAULT_PARALLELISM = 2
         const val SNAPSEED_PACKAGE = "com.niksoftware.snapseed"
@@ -246,6 +257,106 @@ class SettingsFragment : Fragment() {
         // Show which native RAW engine is compiled in
         view.findViewById<TextView>(R.id.txtBackendInfo).text =
             getString(R.string.backend_info, DNGConverter.backendName, DNGConverter.backendVersion)
+
+        setupSourcesSection(view)
+    }
+
+    // === Sources: RapidRawCloud pairing, saved folders, fetch cache ===
+
+    private fun setupSourcesSection(view: View) {
+        val txtStatus = view.findViewById<TextView>(R.id.txtRrcStatus)
+        val serviceLayout = view.findViewById<View>(R.id.rrcServiceLayout)
+        val editService = view.findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.editRrcService)
+        val btnPair = view.findViewById<Button>(R.id.btnRrcPair)
+        val btnUnpair = view.findViewById<Button>(R.id.btnRrcUnpair)
+
+        fun refreshRrc() {
+            val cfg = RrcConfig.load(requireContext())
+            if (cfg != null) {
+                txtStatus.text = getString(R.string.rrc_paired, cfg.bucket, cfg.host)
+                serviceLayout.visibility = View.GONE
+                btnPair.visibility = View.GONE
+                btnUnpair.visibility = View.VISIBLE
+            } else {
+                txtStatus.text = getString(R.string.rrc_not_paired)
+                serviceLayout.visibility = View.VISIBLE
+                btnPair.visibility = View.VISIBLE
+                btnUnpair.visibility = View.GONE
+            }
+        }
+        refreshRrc()
+        editService.setText(requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getString(KEY_RRC_SERVICE, ""))
+
+        btnPair.setOnClickListener {
+            val service = editService.text?.toString() ?: ""
+            requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit().putString(KEY_RRC_SERVICE, service).apply()
+            btnPair.isEnabled = false
+            viewLifecycleOwner.lifecycleScope.launch {
+                try {
+                    RrcPairing.start(requireContext(), service)
+                    android.widget.Toast.makeText(requireContext(), R.string.rrc_pairing_started, android.widget.Toast.LENGTH_SHORT).show()
+                } catch (e: Exception) {
+                    android.widget.Toast.makeText(requireContext(), getString(R.string.rrc_pairing_failed, e.message ?: ""), android.widget.Toast.LENGTH_LONG).show()
+                } finally {
+                    btnPair.isEnabled = true
+                }
+            }
+        }
+        btnUnpair.setOnClickListener {
+            RrcPairing.unpair(requireContext())
+            refreshRrc()
+        }
+
+        val folderList = view.findViewById<android.widget.LinearLayout>(R.id.sourceFolderList)
+        fun refreshFolders() {
+            folderList.removeAllViews()
+            val trees = SourceRegistry.all().filterIsInstance<DocumentTreeSource>()
+            if (trees.isEmpty()) {
+                folderList.addView(TextView(requireContext()).apply {
+                    text = getString(R.string.sources_no_folders)
+                    textSize = 12f
+                    setTextColor(ContextCompat.getColor(requireContext(), android.R.color.darker_gray))
+                })
+                return
+            }
+            for (tree in trees) {
+                val row = android.widget.LinearLayout(requireContext()).apply { orientation = android.widget.LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL }
+                row.addView(TextView(requireContext()).apply {
+                    text = "${tree.descriptor.displayName}\n${tree.descriptor.detail}"
+                    textSize = 13f
+                    layoutParams = android.widget.LinearLayout.LayoutParams(0, android.view.ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                })
+                row.addView(Button(requireContext(), null, android.R.attr.borderlessButtonStyle).apply {
+                    text = getString(R.string.source_forget)
+                    setOnClickListener {
+                        AlertDialog.Builder(requireContext())
+                            .setMessage(getString(R.string.source_forget_confirm, tree.descriptor.displayName))
+                            .setPositiveButton(R.string.source_forget) { _, _ ->
+                                SourceRegistry.removeDocumentTree(requireContext(), tree)
+                                refreshFolders()
+                            }
+                            .setNegativeButton(R.string.cancel, null)
+                            .show()
+                    }
+                })
+                folderList.addView(row)
+            }
+        }
+        refreshFolders()
+
+        val btnClearCache = view.findViewById<Button>(R.id.btnClearFetchCache)
+        fun refreshCacheLabel() {
+            val bytes = SourceFetchCache.sizeBytes(requireContext())
+            val label = if (bytes < 1024 * 1024) "${bytes / 1024} KB" else "%.1f MB".format(bytes / 1024.0 / 1024.0)
+            btnClearCache.text = getString(R.string.sources_clear_cache, label)
+        }
+        refreshCacheLabel()
+        btnClearCache.setOnClickListener {
+            viewLifecycleOwner.lifecycleScope.launch {
+                withContext(Dispatchers.IO) { SourceFetchCache.clear(requireContext()) }
+                refreshCacheLabel()
+            }
+        }
     }
     
     private fun saveSettings() {
