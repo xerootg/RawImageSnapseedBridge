@@ -22,7 +22,4 @@
     <color name="md_theme_surfaceVariant">#49454F</color>
     <color name="md_theme_onSurfaceVariant">#CAC4D0</color>
     
-    <color name="md_theme_outline">#938F99</color>
-    <color name="md_theme_error">#F2B8B5</color>
-    <color name="md_theme_onError">#601410</color>
 </resources>
