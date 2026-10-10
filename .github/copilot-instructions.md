@@ -172,36 +172,32 @@ ImagePreviewDialog (shared)
 
 ```
 com.raw2dng/
-├── MainActivity.kt           # Main activity with ViewPager2 + TabLayout
-├── MainPagerAdapter.kt       # ViewPager2 adapter for fragments
+├── MainActivity.kt           # Main activity with ViewPager2 + TabLayout (TabAdapter inner class)
 │
 ├── RawFilePickerFragment.kt  # RAW file browser and conversion UI
 ├── RawFileAdapter.kt         # RecyclerView adapter for RAW files
 ├── RawFileItem.kt            # Data class for RAW file metadata
 │
 ├── GalleryFragment.kt        # Gallery of converted images
-├── GalleryAdapter.kt         # RecyclerView adapter with multi-select
-├── GalleryItem.kt            # Data class for gallery items
+├── GalleryAdapter.kt         # RecyclerView adapter with multi-select (GalleryItem data class inside)
 │
 ├── ConversionQueue.kt        # Manages parallel conversion jobs with configurable parallelism
 ├── ConversionThumbnailAdapter.kt # Adapter for conversion progress thumbnails
 ├── ConvertedFilesHelper.kt   # Checks conversion status by file existence
 ├── OutputFormat.kt           # Enum: DNG, JPEG
-├── PreviewMode.kt            # Enum: RAW_CONVERSION, GALLERY_VIEW (in ImagePreviewDialog.kt)
 │
 ├── ThumbnailCache.kt         # LRU cache for RAW previews extracted via the native backend (upright, max 3072px)
-├── ThumbnailStripAdapter.kt  # Horizontal thumbnail strip in preview dialog
-├── ThumbnailStripItem.kt     # Data class with uri and conversion status
+├── ThumbnailStripAdapter.kt  # Horizontal thumbnail strip in preview dialog (ThumbnailStripItem data class inside)
 ├── DNGConverter.kt           # Typed Kotlin facade over the JNI entry points (JpegResult/PreviewResult, backend info, supported extensions)
-├── ImagePreviewDialog.kt     # Fullscreen preview dialog with selection
+├── ImagePreviewDialog.kt     # Fullscreen preview dialog with selection (PreviewMode enum inside)
+├── ZoomableImageView.kt      # Pinch/double-tap zoomable ImageView used by the preview pager
 ├── ImagePagerAdapter.kt      # ViewPager2 adapter for preview images
 ├── SettingsFragment.kt       # Settings tab with all app preferences (auto-save)
 ├── RawTypesDialogFragment.kt # Hierarchical RAW format selection dialog
 ├── JpegSettingsDialog.kt     # JPEG conversion settings (quality, chroma, optimize, embedded camera JPEG policy)
 ├── LicensesDialog.kt         # Open source licenses display
 ├── RegenerateDialog.kt       # Format/settings dialog for regeneration (navigates to Convert tab)
-├── ExifData.kt               # EXIF/metadata extraction: backend JSON for RAW/DNG, ExifInterface for JPEG
-└── FullscreenImageActivity.kt # Fullscreen RAW preview
+└── ExifData.kt               # EXIF/metadata extraction: backend JSON for RAW/DNG, ExifInterface for JPEG
 ```
 
 ### Native Code (C++ + Rust)
@@ -622,9 +618,9 @@ Constants:
 24. **Gallery filter clears selection**: Changing filters calls clearSelectionOnFilterChange() to prevent stale item references
 25. **JPEG quality defaults**: 95 quality, 4:4:4 chroma (no subsampling), Huffman optimization enabled
 26. **Double-tap preview**: Both GalleryAdapter and RawFileAdapter use GestureDetector for double-tap to open preview
-27. **Settings gear icon**: Both fragments have headerRow with settings button that opens SettingsDialog
+27. **Settings tab**: settings live in SettingsFragment (third tab); the former modal SettingsDialog was removed
 28. **RAW type filtering**: RawFilePickerFragment.getEnabledRawExtensions() reads from SharedPreferences
-29. **FlexboxLayout**: Google library for responsive chip layout in settings dialog
+29. **Material chips**: filter chips in the Convert/Gallery tabs use Material ChipGroup
 30. **ExifData**: Hybrid helper class - backend JSON (dnglab-ffi) for RAW/DNG files, ExifInterface for JPEG
 31. **EXIF categories**: Camera, Lens, Exposure, Shooting, Dimensions, GPS, Date - displayed in scrollable overlay
 32. **extractMetadataJson()**: RawBackend method (dnglab-ffi metadata.rs) returns backend-neutral JSON with complete metadata

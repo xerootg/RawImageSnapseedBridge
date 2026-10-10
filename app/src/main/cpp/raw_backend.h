@@ -2,9 +2,9 @@
 // Backend-neutral interface for everything the app needs from a RAW decoding
 // library: DNG authoring, JPEG export, preview extraction and metadata.
 //
-// The JNI layer talks only to this interface. Concrete backends (LibRaw +
-// Adobe DNG SDK, dnglab/rawler, ...) implement it and are selected at build
-// time through raw2dng::backend().
+// The JNI layer talks only to this interface. A concrete backend (today
+// dnglab/rawler, see dnglab_backend.cpp) implements it and is selected at
+// build time through raw2dng::backend().
 
 #ifndef RAW2DNG_RAW_BACKEND_H
 #define RAW2DNG_RAW_BACKEND_H
@@ -138,26 +138,6 @@ public:
 // The process-wide backend instance. Defined by the backend implementation
 // that is compiled into the native library.
 RawBackend& backend();
-
-// Convert an EXIF orientation value (1..8) to the "flip" convention used by
-// dcraw/LibRaw (0 = normal, 3 = 180 deg, 5 = 90 deg CCW, 6 = 90 deg CW) and back.
-inline int exifOrientationToFlip(int orientation) {
-    switch (orientation) {
-        case 3: return 3;
-        case 6: return 6;
-        case 8: return 5;
-        default: return 0;
-    }
-}
-
-inline int flipToExifOrientation(int flip) {
-    switch (flip) {
-        case 3: return 3;
-        case 5: return 8;
-        case 6: return 6;
-        default: return 1;
-    }
-}
 
 } // namespace raw2dng
 

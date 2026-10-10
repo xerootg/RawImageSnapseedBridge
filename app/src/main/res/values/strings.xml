@@ -93,7 +93,6 @@
     <!-- Settings -->
     <string name="settings">Settings</string>
     <string name="settings_placeholder">No settings available yet</string>
-    <string name="save">Save</string>
     <string name="open_settings">Open settings</string>
     <string name="autonav_timeout_label">Auto-navigate countdown (seconds)</string>
     <string name="autonav_zero_warning">⚠️ With 0 seconds, navigation happens immediately even if some conversions failed</string>

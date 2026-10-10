@@ -671,7 +671,7 @@ class ImagePreviewDialog : DialogFragment() {
         val fileSize = fileSizes.getOrNull(currentPosition) ?: 0L
         val fileType = fileTypes.getOrNull(currentPosition) ?: ""
         
-        // Use LibRaw for all file types (RAW, DNG, JPEG)
+        // Native backend for RAW/DNG, ExifInterface for JPEG (see ExifData.extractFromUri)
         try {
             ExifData.extractFromUri(requireContext(), uri, fileName, fileSize)
         } catch (e: Exception) {
