@@ -53,7 +53,10 @@ android {
         }
 
         ndk {
-            abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86', 'x86_64'
+            // Local iteration: ./gradlew assembleDebug -PabiFilters=arm64-v8a builds one ABI
+            // (the Rust engine is compiled once per ABI). CI builds all four.
+            def abis = (project.findProperty("abiFilters") ?: "arm64-v8a,armeabi-v7a,x86,x86_64").toString().split(",")*.trim()
+            abiFilters(*abis)
         }
     }
 
