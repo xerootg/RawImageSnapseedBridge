@@ -1,6 +1,4 @@
-[submodule "app/src/main/cpp/cJSON"]
-	path = app/src/main/cpp/cJSON
-	url = https://github.com/DaveGamble/cJSON.git
-[submodule "app/src/main/cpp/LibRaw"]
-	path = app/src/main/cpp/LibRaw
-	url = https://github.com/LibRaw/LibRaw.git
+[submodule "app/src/main/cpp/dnglab"]
+	path = app/src/main/cpp/dnglab
+	url = https://github.com/xerootg/dnglab.git
+	branch = lightbox

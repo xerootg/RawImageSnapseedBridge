@@ -1,6 +1,6 @@
 # backlog
 ## exif
-* if there's AF info, please render a green box on the convert preview where the af location was if the data is available - libraw_afinfo_item_t, in libraw_metadata_common_t, part of makernotes. Do not do this for the gallery preview.
+* if there's AF info, please render a green box on the convert preview where the af location was if the data is available (rawler would need to expose AF point data from the makernotes). Do not do this for the gallery preview.
 
 ## exif editing
 * allow all dng exif fields to be editable
@@ -12,5 +12,5 @@
 ## release!
 * playstore??? f-droid???
 * a button in settings after the licenses button to navigate to the github for this project
-* source libraw from the jetpack source
+* expose more dnglab authoring options in the UI (embed original RAW, DCP profile directory, uncompressed DNG)
 * find a way to handle license credits semi-automatically - using llm extraction is a great way to miss someone

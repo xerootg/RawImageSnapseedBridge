@@ -160,18 +160,20 @@ class MainActivity : AppCompatActivity() {
      * @param jpegQuality JPEG quality (1-100), only used if outputFormat is JPEG
      * @param jpegChroma JPEG chroma subsampling, only used if outputFormat is JPEG
      * @param jpegOptimize Whether to optimize JPEG Huffman tables, only used if outputFormat is JPEG
+     * @param jpegEmbeddedPolicy When to reuse the camera's embedded JPEG, only used if outputFormat is JPEG
      */
     fun navigateToConvertAndStart(
         rawUris: List<Uri>,
         outputFormat: OutputFormat,
         jpegQuality: Int = 95,
         jpegChroma: Int = DNGConverter.CHROMA_SUBSAMPLING_444,
-        jpegOptimize: Boolean = true
+        jpegOptimize: Boolean = true,
+        jpegEmbeddedPolicy: Int = DNGConverter.DEFAULT_EMBEDDED_POLICY
     ) {
         binding.viewPager.currentItem = 0
         // Use post to ensure the fragment is fully visible before selecting and starting
         binding.viewPager.post {
-            pickerFragment?.selectFilesAndStartConversion(rawUris, outputFormat, jpegQuality, jpegChroma, jpegOptimize)
+            pickerFragment?.selectFilesAndStartConversion(rawUris, outputFormat, jpegQuality, jpegChroma, jpegOptimize, jpegEmbeddedPolicy)
         }
     }
 

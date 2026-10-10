@@ -31,7 +31,7 @@ class RawTypesDialogFragment : DialogFragment() {
          * Note: Some extensions like RAW are used by multiple manufacturers,
          * so they appear under the most common one or are listed separately.
          */
-        val MANUFACTURERS: LinkedHashMap<String, List<String>> = linkedMapOf(
+        private val ALL_MANUFACTURERS: LinkedHashMap<String, List<String>> = linkedMapOf(
             "Canon" to listOf("cr2", "cr3", "crw"),
             "Nikon" to listOf("nef", "nrw"),
             "Sony" to listOf("arw", "sr2", "srf"),
@@ -53,6 +53,20 @@ class RawTypesDialogFragment : DialogFragment() {
             "Konica Minolta" to listOf("mrw"),
             "GoPro" to listOf("gpr")
         )
+
+        /**
+         * Manufacturer -> extensions, restricted to what the native RAW backend can decode.
+         * Manufacturers without any supported format are dropped.
+         */
+        val MANUFACTURERS: LinkedHashMap<String, List<String>> by lazy {
+            val supported = DNGConverter.supportedExtensions
+            val filtered = LinkedHashMap<String, List<String>>()
+            for ((maker, exts) in ALL_MANUFACTURERS) {
+                val kept = exts.filter { it in supported }
+                if (kept.isNotEmpty()) filtered[maker] = kept
+            }
+            filtered
+        }
 
         /**
          * Get all unique extensions from all manufacturers as a flat array.

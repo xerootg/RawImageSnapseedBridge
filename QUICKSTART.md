@@ -47,24 +47,13 @@ git clone <your-repo-url>
 cd raw2dng2
 ```
 
-### 3. (Optional) Add Adobe DNG SDK
-
-**Want real RAW conversion?** Add the Adobe DNG SDK:
+### 3. Fetch the RAW engine submodule
 
 ```bash
-# 1. Download from: https://helpx.adobe.com/camera-raw/digital-negative.html
-# 2. Extract the ZIP
-# 3. Copy files:
-cp /path/to/dng_sdk/source/*.cpp app/src/main/cpp/dng_sdk/
-cp /path/to/dng_sdk/source/*.h app/src/main/cpp/dng_sdk/
-
-# 4. Verify:
-ls app/src/main/cpp/dng_sdk/dng_*.cpp | wc -l
-# Should show 50+ files
+git submodule update --init --recursive
 ```
 
-**Skip this for now?** No problem! The app will build and run, but create placeholder files instead of real DNG conversions.
-
+The RAW engine (dnglab/rawler) is built from source inside the Docker image; nothing proprietary to download.
 ### 4. Build the APK
 
 ```bash

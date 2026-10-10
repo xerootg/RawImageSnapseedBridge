@@ -129,6 +129,44 @@
 
         </RadioGroup>
 
+        <!-- Embedded camera JPEG policy -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/jpeg_embedded_label"
+            android:textSize="14sp"
+            android:layout_marginTop="12dp"
+            android:layout_marginBottom="4dp" />
+
+        <RadioGroup
+            android:id="@+id/radioGroupEmbedded"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <RadioButton
+                android:id="@+id/radioEmbeddedFullRes"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/jpeg_embedded_full_res"
+                android:textSize="13sp" />
+
+            <RadioButton
+                android:id="@+id/radioEmbeddedAlways"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/jpeg_embedded_always"
+                android:textSize="13sp" />
+
+            <RadioButton
+                android:id="@+id/radioEmbeddedNever"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/jpeg_embedded_never"
+                android:textSize="13sp" />
+
+        </RadioGroup>
+
         <!-- Optimize Huffman -->
         <CheckBox
             android:id="@+id/chkOptimize"

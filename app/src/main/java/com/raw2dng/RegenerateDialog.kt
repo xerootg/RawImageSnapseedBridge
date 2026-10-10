@@ -27,7 +27,8 @@ class RegenerateDialog : DialogFragment() {
             outputFormat: OutputFormat,
             jpegQuality: Int,
             jpegChroma: Int,
-            jpegOptimize: Boolean
+            jpegOptimize: Boolean,
+            jpegEmbeddedPolicy: Int
         )
     }
     
@@ -54,6 +55,7 @@ class RegenerateDialog : DialogFragment() {
         val seekQuality = view.findViewById<SeekBar>(R.id.seekQuality)
         val txtQualityValue = view.findViewById<TextView>(R.id.txtQualityValue)
         val radioGroupChroma = view.findViewById<RadioGroup>(R.id.radioGroupChroma)
+        val radioGroupEmbedded = view.findViewById<RadioGroup>(R.id.radioGroupEmbedded)
         val chkOptimize = view.findViewById<CheckBox>(R.id.chkOptimize)
         val btnCancel = view.findViewById<Button>(R.id.btnCancel)
         val btnRegenerate = view.findViewById<Button>(R.id.btnRegenerate)
@@ -62,6 +64,8 @@ class RegenerateDialog : DialogFragment() {
         val defaultQuality = JpegSettingsDialog.getJpegQuality(requireContext())
         val defaultChroma = JpegSettingsDialog.getJpegChroma(requireContext())
         val defaultOptimize = JpegSettingsDialog.getJpegOptimize(requireContext())
+        val defaultEmbedded = JpegSettingsDialog.getJpegEmbeddedPolicy(requireContext())
+        radioGroupEmbedded.check(JpegSettingsDialog.embeddedPolicyToRadioId(defaultEmbedded))
         
         // Initialize JPEG settings with app defaults
         seekQuality.progress = defaultQuality
@@ -122,8 +126,9 @@ class RegenerateDialog : DialogFragment() {
             }
             
             val optimize = chkOptimize.isChecked
+            val embeddedPolicy = JpegSettingsDialog.radioIdToEmbeddedPolicy(radioGroupEmbedded.checkedRadioButtonId)
             
-            listener?.onRegenerate(outputFormat, quality, chroma, optimize)
+            listener?.onRegenerate(outputFormat, quality, chroma, optimize, embeddedPolicy)
             dismiss()
         }
         

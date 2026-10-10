@@ -9,7 +9,7 @@ import java.io.FileOutputStream
 
 /**
  * Data class representing complete EXIF/metadata for an image file.
- * All metadata is extracted via LibRaw JNI for consistency across RAW, DNG, and JPEG.
+ * RAW/DNG metadata comes from the native RAW backend (see DNGConverter), JPEG metadata from ExifInterface.
  */
 data class ExifData(
     // Camera info
@@ -191,22 +191,16 @@ data class ExifData(
     companion object {
         private const val TAG = "ExifData"
         
-        // RAW file extensions that LibRaw can handle (includes DNG)
-        private val RAW_EXTENSIONS = setOf(
-            "3fr", "arw", "cr2", "cr3", "dcr", "dng", "erf", "iiq", "k25", "kdc",
-            "mef", "mos", "nef", "nrw", "orf", "pef", "raf", "rw2", "sr2", "srf"
-        )
-        
         /**
-         * Check if the file extension indicates a RAW file that LibRaw can read.
+         * Check if the file extension indicates a RAW (or DNG) file the native backend can read.
          */
         private fun isRawFile(fileName: String): Boolean {
             val ext = fileName.substringAfterLast('.', "").lowercase()
-            return RAW_EXTENSIONS.contains(ext)
+            return ext == "dng" || DNGConverter.supportedExtensions.contains(ext)
         }
         
         /**
-         * Extract metadata from a RAW file using LibRaw JNI.
+         * Extract metadata from a RAW file using the native RAW backend.
          * 
          * @param filePath Path to the RAW file
          * @param fileName Display name for the file
@@ -338,7 +332,7 @@ data class ExifData(
         
         /**
          * Extract metadata from a content URI.
-         * Uses LibRaw for RAW/DNG files and ExifInterface for JPEG.
+         * Uses the native RAW backend for RAW/DNG files and ExifInterface for JPEG.
          * 
          * @param context Android context for content resolver
          * @param uri Content URI of the file
@@ -351,7 +345,7 @@ data class ExifData(
             
             return try {
                 if (isRaw) {
-                    // RAW/DNG file - copy to temp and use LibRaw
+                    // RAW/DNG file - copy to temp and use the native backend
                     val extension = fileName.substringAfterLast('.', "raw").lowercase()
                     val tempFile = File(context.cacheDir, "exif_temp_${System.currentTimeMillis()}.$extension")
                     
@@ -399,7 +393,7 @@ data class ExifData(
         
         /**
          * Extract raw JSON metadata from a content URI.
-         * For RAW/DNG files, returns the LibRaw JSON directly.
+         * For RAW/DNG files, returns the backend JSON directly.
          * For JPEG files, builds a JSON from ExifInterface data.
          * 
          * @param context Android context for content resolver
@@ -421,7 +415,7 @@ data class ExifData(
                 } ?: return "{\"error\": \"Cannot open file\"}"
                 
                 val jsonStr = if (isRaw) {
-                    // RAW/DNG - use LibRaw
+                    // RAW/DNG - use the native backend
                     val converter = DNGConverter.instance
                     converter.extractMetadata(tempFile.absolutePath)
                 } else {
@@ -512,7 +506,7 @@ data class ExifData(
         }
         
         /**
-         * Parse the JSON metadata string from LibRaw into an ExifData object.
+         * Parse the backend-neutral JSON metadata (see raw_backend.h) into an ExifData object.
          */
         private fun parseMetadataJson(
             jsonStr: String, 
@@ -619,11 +613,14 @@ data class ExifData(
          * Write EXIF metadata from a RAW file to a JPEG file.
          * Extracts metadata from the source RAW and writes it to the destination JPEG.
          * 
+         * Only needed for backends that do not author EXIF themselves.
+         *
          * @param rawFilePath Path to the source RAW file
          * @param jpegFilePath Path to the destination JPEG file
+         * @param orientation EXIF orientation (1..8) describing how the JPEG pixels are stored
          * @return true on success, false on failure
          */
-        fun writeExifToJpeg(rawFilePath: String, jpegFilePath: String): Boolean {
+        fun writeExifToJpeg(rawFilePath: String, jpegFilePath: String, orientation: Int = 1): Boolean {
             return try {
                 // Extract metadata from RAW file
                 val converter = DNGConverter.instance
@@ -646,6 +643,9 @@ data class ExifData(
                 
                 // Software
                 exif.setAttribute(ExifInterface.TAG_SOFTWARE, "Raw2DNG")
+                
+                // Orientation of the stored pixels (1 = upright)
+                exif.setAttribute(ExifInterface.TAG_ORIENTATION, (if (orientation in 1..8) orientation else 1).toString())
                 
                 // Lens info
                 val lensMake = json.optString("lens_make", "")

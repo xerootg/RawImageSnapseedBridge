@@ -52,7 +52,7 @@ fi
 echo "Starting APK build in Docker container..."
 echo ""
 echo "NOTE: First build may take 10-15 minutes as Gradle downloads dependencies"
-echo "      and compiles the DNG SDK. Subsequent builds will be much faster."
+echo "      and compiles the Rust RAW engine (dnglab-ffi). Subsequent builds will be much faster."
 echo ""
 
 $DOCKER_COMPOSE run --rm android-builder

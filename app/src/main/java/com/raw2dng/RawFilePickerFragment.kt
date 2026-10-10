@@ -195,13 +195,15 @@ class RawFilePickerFragment : Fragment() {
      * @param jpegQuality JPEG quality (1-100), only used if outputFormat is JPEG
      * @param jpegChroma JPEG chroma subsampling, only used if outputFormat is JPEG
      * @param jpegOptimize Whether to optimize JPEG Huffman tables, only used if outputFormat is JPEG
+     * @param jpegEmbeddedPolicy When to reuse the camera's embedded JPEG, only used if outputFormat is JPEG
      */
     fun selectFilesAndStartConversion(
         uris: List<Uri>,
         outputFormat: OutputFormat,
         jpegQuality: Int = 95,
         jpegChroma: Int = DNGConverter.CHROMA_SUBSAMPLING_444,
-        jpegOptimize: Boolean = true
+        jpegOptimize: Boolean = true,
+        jpegEmbeddedPolicy: Int = DNGConverter.DEFAULT_EMBEDDED_POLICY
     ) {
         if (_binding == null || uris.isEmpty()) return
         
@@ -221,7 +223,7 @@ class RawFilePickerFragment : Fragment() {
             
             if (selectedFiles.isNotEmpty()) {
                 // Start conversion with the specified settings
-                startConversionWithSettings(selectedFiles, outputFormat, jpegQuality, jpegChroma, jpegOptimize)
+                startConversionWithSettings(selectedFiles, outputFormat, jpegQuality, jpegChroma, jpegOptimize, jpegEmbeddedPolicy)
             }
         }
     }
@@ -593,7 +595,8 @@ class RawFilePickerFragment : Fragment() {
         val jpegQuality = JpegSettingsDialog.getJpegQuality(requireContext())
         val jpegChroma = JpegSettingsDialog.getJpegChroma(requireContext())
         val jpegOptimize = JpegSettingsDialog.getJpegOptimize(requireContext())
-        startConversionWithSettings(selectedFiles, outputFormat, jpegQuality, jpegChroma, jpegOptimize)
+        val jpegEmbeddedPolicy = JpegSettingsDialog.getJpegEmbeddedPolicy(requireContext())
+        startConversionWithSettings(selectedFiles, outputFormat, jpegQuality, jpegChroma, jpegOptimize, jpegEmbeddedPolicy)
     }
     
     /**
@@ -605,7 +608,8 @@ class RawFilePickerFragment : Fragment() {
         outputFormat: OutputFormat,
         jpegQuality: Int,
         jpegChroma: Int,
-        jpegOptimize: Boolean
+        jpegOptimize: Boolean,
+        jpegEmbeddedPolicy: Int = DNGConverter.DEFAULT_EMBEDDED_POLICY
     ) {
         if (selectedFiles.isEmpty()) return
         
@@ -741,8 +745,9 @@ class RawFilePickerFragment : Fragment() {
                             is SaveResult.Success -> {
                                 // Mark success in thumbnail grid
                                 conversionThumbnailAdapter.markSuccess(result.task.inputUri)
-                                Log.d(tag, "✓ ${result.task.fileName}")
-                                appendLog("✓ ${result.task.fileName}")
+                                val source = if (result.usedEmbeddedJpeg) " (camera JPEG)" else ""
+                                Log.d(tag, "✓ ${result.task.fileName}$source")
+                                appendLog("✓ ${result.task.fileName}$source")
                                 // Track URI for single DNG conversion (Snapseed feature)
                                 if (result.task.outputFormat == OutputFormat.DNG) {
                                     lastConvertedDngUri = saveResult.uri
@@ -884,7 +889,8 @@ class RawFilePickerFragment : Fragment() {
             parallelism = SettingsFragment.getConversionParallelism(requireContext()),
             jpegQuality = jpegQuality,
             jpegChroma = jpegChroma,
-            jpegOptimize = jpegOptimize
+            jpegOptimize = jpegOptimize,
+            jpegEmbeddedPolicy = jpegEmbeddedPolicy
         )
 
         conversionQueue?.addTasks(tasks)

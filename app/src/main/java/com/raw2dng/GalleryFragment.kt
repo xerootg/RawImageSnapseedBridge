@@ -825,7 +825,8 @@ class GalleryFragment : Fragment() {
                     outputFormat: OutputFormat,
                     jpegQuality: Int,
                     jpegChroma: Int,
-                    jpegOptimize: Boolean
+                    jpegOptimize: Boolean,
+                    jpegEmbeddedPolicy: Int
                 ) {
                     // Clear selection before navigating
                     adapter.clearSelection()
@@ -836,7 +837,8 @@ class GalleryFragment : Fragment() {
                         outputFormat,
                         jpegQuality,
                         jpegChroma,
-                        jpegOptimize
+                        jpegOptimize,
+                        jpegEmbeddedPolicy
                     )
                 }
             })

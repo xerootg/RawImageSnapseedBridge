@@ -18,7 +18,9 @@ data class ConversionTask(
 data class ConversionResult(
     val task: ConversionTask,
     val success: Boolean,
-    val errorMessage: String = ""
+    val errorMessage: String = "",
+    /** JPEG only: true when the camera's embedded JPEG was reused instead of rendering. */
+    val usedEmbeddedJpeg: Boolean = false
 )
 
 /**
@@ -28,6 +30,7 @@ data class ConversionResult(
  * @param jpegQuality JPEG quality (1-100)
  * @param jpegChroma Chroma subsampling mode
  * @param jpegOptimize Enable Huffman table optimization
+ * @param jpegEmbeddedPolicy When to reuse the camera's embedded JPEG instead of rendering
  */
 class ConversionQueue(
     private val converter: DNGConverter,
@@ -37,7 +40,8 @@ class ConversionQueue(
     private val parallelism: Int = DEFAULT_PARALLELISM,
     private val jpegQuality: Int = DNGConverter.DEFAULT_QUALITY,
     private val jpegChroma: Int = DNGConverter.DEFAULT_SUBSAMPLING,
-    private val jpegOptimize: Boolean = DNGConverter.DEFAULT_OPTIMIZE
+    private val jpegOptimize: Boolean = DNGConverter.DEFAULT_OPTIMIZE,
+    private val jpegEmbeddedPolicy: Int = DNGConverter.DEFAULT_EMBEDDED_POLICY
 ) {
     companion object {
         private const val TAG = "ConversionQueue"
@@ -177,6 +181,7 @@ class ConversionQueue(
             }
 
             // Perform the conversion based on format
+            var usedEmbeddedJpeg = false
             val errorMessage = when (task.outputFormat) {
                 OutputFormat.DNG -> converter.convertToDNG(task.inputPath, task.outputPath)
                 OutputFormat.JPEG -> {
@@ -185,13 +190,21 @@ class ConversionQueue(
                         task.outputPath, 
                         jpegQuality,
                         jpegChroma,
-                        jpegOptimize
+                        jpegOptimize,
+                        jpegEmbeddedPolicy,
+                        embedExif = true
                     )
-                    // If JPEG conversion succeeded, write EXIF data from the source RAW
-                    if (result.isEmpty()) {
-                        ExifData.writeExifToJpeg(task.inputPath, task.outputPath)
+                    usedEmbeddedJpeg = result.usedEmbeddedJpeg
+                    if (result.success) {
+                        Log.d(TAG, "JPEG ${task.fileName}: ${if (usedEmbeddedJpeg) "embedded camera JPEG" else "rendered from sensor data"} ${result.width}x${result.height}")
+                        // Backends that cannot author EXIF themselves leave it to us.
+                        if (!result.exifEmbedded) {
+                            ExifData.writeExifToJpeg(task.inputPath, task.outputPath, result.orientation)
+                        }
+                        ""
+                    } else {
+                        result.errorMessage
                     }
-                    result
                 }
             }
 
@@ -200,7 +213,7 @@ class ConversionQueue(
             val result = if (errorMessage.isEmpty()) {
                 successfulCount.incrementAndGet()
                 Log.d(TAG, "Worker $workerId success: ${task.fileName}")
-                ConversionResult(task, true)
+                ConversionResult(task, true, usedEmbeddedJpeg = usedEmbeddedJpeg)
             } else {
                 failedCount.incrementAndGet()
                 Log.e(TAG, "Worker $workerId failed: ${task.fileName} - $errorMessage")

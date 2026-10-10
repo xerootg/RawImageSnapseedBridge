@@ -24,11 +24,11 @@
             android:layout_height="wrap_content"
             android:orientation="vertical">
 
-            <!-- LibRaw -->
+            <!-- dnglab -->
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="@string/license_libraw_title"
+                android:text="@string/license_dnglab_title"
                 android:textSize="16sp"
                 android:textStyle="bold"
                 android:textColor="?android:textColorPrimary"
@@ -37,17 +37,17 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="@string/license_libraw_text"
+                android:text="@string/license_dnglab_text"
                 android:textSize="12sp"
                 android:fontFamily="monospace"
                 android:layout_marginTop="4dp"
                 android:layout_marginBottom="16dp" />
 
-            <!-- Adobe DNG SDK -->
+            <!-- rust_crates -->
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="@string/license_dng_sdk_title"
+                android:text="@string/license_rust_crates_title"
                 android:textSize="16sp"
                 android:textStyle="bold"
                 android:textColor="?android:textColorPrimary" />
@@ -55,43 +55,7 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="@string/license_dng_sdk_text"
-                android:textSize="12sp"
-                android:fontFamily="monospace"
-                android:layout_marginTop="4dp"
-                android:layout_marginBottom="16dp" />
-
-            <!-- cJSON -->
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/license_cjson_title"
-                android:textSize="16sp"
-                android:textStyle="bold"
-                android:textColor="?android:textColorPrimary" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/license_cjson_text"
-                android:textSize="12sp"
-                android:fontFamily="monospace"
-                android:layout_marginTop="4dp"
-                android:layout_marginBottom="16dp" />
-
-            <!-- Independent JPEG Group -->
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/license_ijg_title"
-                android:textSize="16sp"
-                android:textStyle="bold"
-                android:textColor="?android:textColorPrimary" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/license_ijg_text"
+                android:text="@string/license_rust_crates_text"
                 android:textSize="12sp"
                 android:fontFamily="monospace"
                 android:layout_marginTop="4dp"

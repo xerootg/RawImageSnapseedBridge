@@ -46,7 +46,8 @@ class SettingsFragment : Fragment() {
         fun getEnabledRawTypes(context: Context): Set<String> {
             val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             val saved = prefs.getStringSet(KEY_ENABLED_RAW_TYPES, null)
-            return saved ?: ALL_RAW_EXTENSIONS.toSet()
+            // Drop extensions a previous backend offered but the current one cannot decode
+            return saved?.intersect(ALL_RAW_EXTENSIONS.toSet()) ?: ALL_RAW_EXTENSIONS.toSet()
         }
         
         /**
@@ -241,6 +242,10 @@ class SettingsFragment : Fragment() {
         btnLicenses.setOnClickListener {
             LicensesDialog.newInstance().show(childFragmentManager, LicensesDialog.TAG)
         }
+        
+        // Show which native RAW engine is compiled in
+        view.findViewById<TextView>(R.id.txtBackendInfo).text =
+            getString(R.string.backend_info, DNGConverter.backendName, DNGConverter.backendVersion)
     }
     
     private fun saveSettings() {

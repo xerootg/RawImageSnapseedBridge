@@ -1,5 +1,6 @@
 # Android Build Environment for Raw2DNG
-# This Dockerfile creates a complete Android build environment with NDK and CMake
+# This Dockerfile creates a complete Android build environment with NDK, CMake and Rust
+# (Rust compiles dnglab-ffi, the RAW engine, for all four Android ABIs).
 
 FROM ubuntu:22.04
 
@@ -38,6 +39,14 @@ RUN /root/.dotnet/dotnet tool install --global GitVersion.Tool --version 5.*
 
 # Set Java environment
 ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+
+# Install Rust (builds the dnglab-ffi RAW engine) with the Android targets
+ENV RUSTUP_HOME=/opt/rust/rustup
+ENV CARGO_HOME=/opt/rust/cargo
+ENV PATH=${PATH}:${CARGO_HOME}/bin
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path --profile minimal --default-toolchain stable \
+    && rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android \
+    && cargo --version && rustc --version
 
 # Create Android SDK directory
 RUN mkdir -p ${ANDROID_HOME}/cmdline-tools

@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # Manual runs build a signed APK and publish it as a GitHub pre-release
+  # (tagged with the GitVersion semver of the branch) so a branch can be
+  # installed and tested without merging.
   workflow_dispatch:
 
 permissions:
@@ -47,11 +50,21 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-buildx-
 
+      # The Rust RAW engine (dnglab-ffi) is compiled inside the container for
+      # four ABIs; cache its target directory between runs.
+      - name: Cache cargo build output
+        uses: actions/cache@v4
+        with:
+          path: app/build/cargo-target
+          key: ${{ runner.os }}-cargo-target-${{ hashFiles('app/src/main/cpp/dnglab/Cargo.lock', '.gitmodules') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-target-
+
       - name: Build Docker image
         run: docker compose build
 
       - name: Generate Release Keystore
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        if: github.event_name == 'workflow_dispatch' || (github.ref == 'refs/heads/main' && github.event_name == 'push')
         run: |
           keytool -genkeypair -v \
             -keystore release.keystore \
@@ -64,7 +77,7 @@ jobs:
             -dname "CN=Raw2DNG, OU=Development, O=Raw2DNG, L=Unknown, ST=Unknown, C=US"
 
       - name: Create keystore.properties
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        if: github.event_name == 'workflow_dispatch' || (github.ref == 'refs/heads/main' && github.event_name == 'push')
         run: |
           cat > keystore.properties << EOF
           storePassword=${{ secrets.KEYSTORE_PASSWORD || 'raw2dng-release-key' }}
@@ -74,7 +87,7 @@ jobs:
           EOF
 
       - name: Build Release APK
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        if: github.event_name == 'workflow_dispatch' || (github.ref == 'refs/heads/main' && github.event_name == 'push')
         run: |
           docker compose run --rm \
             -e VERSION_NAME=${{ steps.gitversion.outputs.semVer }} \
@@ -83,7 +96,7 @@ jobs:
             android-builder
 
       - name: Build Debug APK
-        if: github.ref != 'refs/heads/main' || github.event_name != 'push'
+        if: github.event_name != 'workflow_dispatch' && (github.ref != 'refs/heads/main' || github.event_name != 'push')
         run: |
           docker compose run --rm \
             -e VERSION_NAME=${{ steps.gitversion.outputs.semVer }} \
@@ -99,11 +112,12 @@ jobs:
           if-no-files-found: error
 
       - name: Create Release
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        if: github.event_name == 'workflow_dispatch' || (github.ref == 'refs/heads/main' && github.event_name == 'push')
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.gitversion.outputs.semVer }}
-          name: Release ${{ steps.gitversion.outputs.semVer }}
+          name: ${{ github.event_name == 'workflow_dispatch' && 'Test build' || 'Release' }} ${{ steps.gitversion.outputs.semVer }}
+          target_commitish: ${{ github.sha }}
           body: |
             ## Raw2DNG ${{ steps.gitversion.outputs.semVer }}
             
@@ -115,8 +129,10 @@ jobs:
             - Version Code: ${{ steps.gitversion.outputs.commitsSinceVersionSource }}
             - Commit: ${{ github.sha }}
             
+            - Branch: ${{ github.ref_name }}
+
             ### Note
-            This is a signed release build generated automatically from the main branch.
+            ${{ github.event_name == 'workflow_dispatch' && 'This is a signed TEST build of a branch, published as a pre-release for manual testing.' || 'This is a signed release build generated automatically from the main branch.' }}
           files: output/app-release.apk
           draft: false
-          prerelease: false
+          prerelease: ${{ github.event_name == 'workflow_dispatch' }}
