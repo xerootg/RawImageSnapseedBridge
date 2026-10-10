@@ -1,8 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Legacy colors -->
-    <color name="black">#FF000000</color>
-    <color name="white">#FFFFFFFF</color>
     
     <!-- Material 3 Color Scheme - Light -->
     <color name="md_theme_primary">#6750A4</color>
@@ -26,7 +24,4 @@
     <color name="md_theme_surfaceVariant">#E7E0EC</color>
     <color name="md_theme_onSurfaceVariant">#49454E</color>
     
-    <color name="md_theme_outline">#79747E</color>
-    <color name="md_theme_error">#B3261E</color>
-    <color name="md_theme_onError">#FFFFFF</color>
 </resources>
