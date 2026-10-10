@@ -148,7 +148,7 @@ object ThumbnailCache {
         }
     
     /**
-     * Extract and cache a thumbnail from a RAW file using LibRaw
+     * Extract and cache a thumbnail from a RAW file using the native RAW backend
      * Returns the bitmap if successful, null otherwise
      */
     suspend fun extractAndCacheThumbnail(
@@ -170,23 +170,25 @@ object ThumbnailCache {
             return@withContext null
         }
         
-        // Extract thumbnail using native code
-        // Result is "flip:X" on success (where X is rotation value) or error message
-        val result = DNGConverter.instance.extractThumbnail(filePath, cacheFile.absolutePath)
+        // Extract the preview using the native backend. The backend prefers the
+        // camera's embedded JPEG and limits the longest edge so the cache stays small.
+        val result = DNGConverter.instance.extractPreview(
+            filePath, cacheFile.absolutePath, DNGConverter.DEFAULT_PREVIEW_MAX_DIMENSION
+        )
         
-        if (result.startsWith("flip:")) {
-            // Success - parse flip value for rotation
-            val flip = result.removePrefix("flip:").toIntOrNull() ?: 0
-            Log.d(TAG, "Successfully extracted thumbnail for: $filePath (flip=$flip)")
+        if (result.success) {
+            Log.d(TAG, "Extracted preview for $filePath (orientation=${result.orientation}, " +
+                "embedded=${result.fromEmbeddedJpeg}, ${result.width}x${result.height})")
             
             // Check if we need to evict old entries
             evictIfNeeded(context)
             
-            // If rotation is needed, load full-size, rotate, and save back to cache
-            if (flip != 0) {
+            // If the backend left the pixels in sensor orientation, bake the rotation
+            // into the cached file so every consumer gets an upright image.
+            if (result.orientation != 1 && result.orientation != 0) {
                 val fullBitmap = loadBitmapFullSize(cacheFile)
                 if (fullBitmap != null) {
-                    val rotated = applyRotation(fullBitmap, flip)
+                    val rotated = applyExifOrientation(fullBitmap, result.orientation)
                     // Save rotated bitmap back to cache
                     saveBitmapToCache(rotated, cacheFile)
                     // Now load with proper sampling
@@ -196,7 +198,7 @@ object ThumbnailCache {
             
             loadCachedThumbnail(context, uri, maxSize)
         } else {
-            Log.e(TAG, "Failed to extract thumbnail: $result")
+            Log.e(TAG, "Failed to extract thumbnail: ${result.errorMessage}")
             null
         }
     }
@@ -228,22 +230,22 @@ object ThumbnailCache {
     }
     
     /**
-     * Apply rotation to a bitmap based on LibRaw flip value
-     * LibRaw flip values: 0=normal, 3=180°, 5=90°CCW, 6=90°CW
+     * Apply an EXIF orientation (1..8) to a bitmap so that it displays upright.
      */
-    private fun applyRotation(bitmap: Bitmap, flip: Int): Bitmap {
-        val degrees = when (flip) {
-            3 -> 180f    // Rotate 180
-            5 -> 270f    // 90° CCW = 270° CW
-            6 -> 90f     // 90° CW
+    private fun applyExifOrientation(bitmap: Bitmap, orientation: Int): Bitmap {
+        val matrix = Matrix()
+        when (orientation) {
+            2 -> matrix.postScale(-1f, 1f)                              // mirror horizontal
+            3 -> matrix.postRotate(180f)                                // rotate 180
+            4 -> matrix.postScale(1f, -1f)                              // mirror vertical
+            5 -> { matrix.postRotate(90f); matrix.postScale(-1f, 1f) }  // transpose
+            6 -> matrix.postRotate(90f)                                 // rotate 90 CW
+            7 -> { matrix.postRotate(270f); matrix.postScale(-1f, 1f) } // transverse
+            8 -> matrix.postRotate(270f)                                // rotate 90 CCW
             else -> return bitmap  // No rotation needed
         }
         
-        Log.d(TAG, "Applying rotation: $degrees degrees (flip=$flip)")
-        
-        val matrix = Matrix().apply {
-            postRotate(degrees)
-        }
+        Log.d(TAG, "Applying EXIF orientation $orientation")
         
         return try {
             val rotated = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)

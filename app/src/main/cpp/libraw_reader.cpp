@@ -330,7 +330,8 @@ void LibRawReader::close() {
 bool LibRawReader::extractThumbnail(const std::string& inputPath,
                                     const std::string& outputPath,
                                     std::string& errorMessage,
-                                    int* outFlip) {
+                                    int* outFlip,
+                                    PreviewResult* outResult) {
     LibRaw processor;
     
     LOGD("Extracting thumbnail from: %s", inputPath.c_str());
@@ -349,6 +350,13 @@ bool LibRawReader::extractThumbnail(const std::string& inputPath,
     if (outFlip) {
         *outFlip = flip;
     }
+    if (outResult) {
+        // LibRaw never rotates embedded thumbnails; the caller has to apply the orientation.
+        outResult->orientation = flipToExifOrientation(flip);
+        outResult->fromEmbeddedJpeg = false;
+        outResult->width = 0;
+        outResult->height = 0;
+    }
     
     // Try to unpack embedded thumbnail
     ret = processor.unpack_thumb();
@@ -364,6 +372,11 @@ bool LibRawReader::extractThumbnail(const std::string& inputPath,
         ret = processor.dcraw_thumb_writer(outputPath.c_str());
         if (ret == LIBRAW_SUCCESS) {
             LOGD("Successfully wrote thumbnail to: %s", outputPath.c_str());
+            if (outResult) {
+                outResult->fromEmbeddedJpeg = (processor.imgdata.thumbnail.tformat == LIBRAW_THUMBNAIL_JPEG);
+                outResult->width = processor.imgdata.thumbnail.twidth;
+                outResult->height = processor.imgdata.thumbnail.theight;
+            }
             processor.recycle();
             return true;
         } else {
@@ -441,6 +454,13 @@ bool LibRawReader::extractThumbnail(const std::string& inputPath,
     fclose(fp);
     
     LOGD("Successfully wrote preview to: %s", outputPath.c_str());
+    if (outResult) {
+        // dcraw_process() already applied the flip, so the pixels are upright.
+        outResult->orientation = 1;
+        outResult->fromEmbeddedJpeg = false;
+        outResult->width = image->width;
+        outResult->height = image->height;
+    }
     
     processor.dcraw_clear_mem(image);
     processor.recycle();
@@ -450,8 +470,10 @@ bool LibRawReader::extractThumbnail(const std::string& inputPath,
 bool LibRawReader::convertToJPEG(const std::string& inputPath,
                                   const std::string& outputPath,
                                   const JpegEncodingSettings& settings,
+                                  JpegResult& result,
                                   std::string& errorMessage) {
     LibRaw processor;
+    result = JpegResult{};
     
     LOGD("Converting RAW to JPEG: %s -> %s (quality: %d, subsampling: %d, optimize: %d)", 
          inputPath.c_str(), outputPath.c_str(), settings.quality, 
@@ -471,6 +493,57 @@ bool LibRawReader::convertToJPEG(const std::string& inputPath,
     }
     
     LOGD("Camera: %s %s", processor.imgdata.idata.make, processor.imgdata.idata.model);
+    
+    // Embedded JPEG passthrough. LibRaw exposes the (largest) embedded thumbnail
+    // through unpack_thumb(); when it is a JPEG and satisfies the policy we copy
+    // it verbatim instead of demosaicing.
+    if (settings.embeddedPolicy != EmbeddedJpegPolicy::Never) {
+        int tret = processor.unpack_thumb();
+        if (tret == LIBRAW_SUCCESS && processor.imgdata.thumbnail.tformat == LIBRAW_THUMBNAIL_JPEG
+            && processor.imgdata.thumbnail.thumb != nullptr && processor.imgdata.thumbnail.tlength > 0) {
+            const int tw = processor.imgdata.thumbnail.twidth;
+            const int th = processor.imgdata.thumbnail.theight;
+            const int aw = processor.imgdata.sizes.width;
+            const int ah = processor.imgdata.sizes.height;
+            // The embedded JPEG may be stored rotated relative to the sensor; compare
+            // the long and short edges so portrait previews are judged correctly.
+            const int tLong = std::max(tw, th), tShort = std::min(tw, th);
+            const int aLong = std::max(aw, ah), aShort = std::min(aw, ah);
+            const bool fullRes = aLong > 0 && aShort > 0
+                && tLong >= (int)(aLong * settings.fullResolutionThreshold)
+                && tShort >= (int)(aShort * settings.fullResolutionThreshold);
+            const bool accept = settings.embeddedPolicy == EmbeddedJpegPolicy::Always || fullRes;
+            LOGD("Embedded JPEG %dx%d (sensor active %dx%d), fullRes=%d, accept=%d", tw, th, aw, ah, fullRes, accept);
+            if (accept) {
+                FILE* out = fopen(outputPath.c_str(), "wb");
+                if (!out) {
+                    errorMessage = "Failed to open output file for writing";
+                    LOGE("%s", errorMessage.c_str());
+                    processor.recycle();
+                    return false;
+                }
+                size_t written = fwrite(processor.imgdata.thumbnail.thumb, 1, processor.imgdata.thumbnail.tlength, out);
+                fclose(out);
+                if (written != (size_t)processor.imgdata.thumbnail.tlength) {
+                    errorMessage = "Failed to write embedded JPEG";
+                    LOGE("%s", errorMessage.c_str());
+                    processor.recycle();
+                    return false;
+                }
+                result.usedEmbeddedJpeg = true;
+                result.width = tw;
+                result.height = th;
+                // Embedded JPEGs are stored in sensor orientation; the EXIF writer must
+                // carry the camera orientation so viewers rotate it.
+                result.orientation = flipToExifOrientation(processor.imgdata.sizes.flip);
+                processor.recycle();
+                LOGD("Copied embedded JPEG to %s", outputPath.c_str());
+                return true;
+            }
+        } else {
+            LOGD("No usable embedded JPEG (%s), rendering from sensor data", libraw_strerror(tret));
+        }
+    }
     
     // Unpack raw data
     ret = processor.unpack();
@@ -600,25 +673,14 @@ bool LibRawReader::convertToJPEG(const std::string& inputPath,
     
     LOGD("Successfully wrote JPEG: %s", outputPath.c_str());
     
+    result.usedEmbeddedJpeg = false;
+    result.width = image->width;
+    result.height = image->height;
+    result.orientation = 1;  // dcraw_process() applied the flip
+    
     processor.dcraw_clear_mem(image);
     processor.recycle();
     return true;
-}
-
-// Convenience overload for JNI with individual parameters
-bool LibRawReader::convertToJPEG(const std::string& inputPath,
-                                  const std::string& outputPath,
-                                  int quality,
-                                  int chromaSubsampling,
-                                  bool optimizeCoding,
-                                  std::string& errorMessage) {
-    JpegEncodingSettings settings;
-    settings.quality = quality;
-    settings.subsampling = static_cast<ChromaSubsampling>(chromaSubsampling);
-    settings.optimizeCoding = optimizeCoding;
-    settings.progressive = false;  // Not exposed to JNI for simplicity
-    
-    return convertToJPEG(inputPath, outputPath, settings, errorMessage);
 }
 
 // Extract metadata from RAW file as JSON
@@ -1477,7 +1539,9 @@ bool LibRawReader::extractMetadataJson(const std::string& inputPath,
     cJSON_AddNumberToObject(root, "height", sizes.height);
     addNumberIfPositive(root, "raw_width", sizes.raw_width);
     addNumberIfPositive(root, "raw_height", sizes.raw_height);
-    addNumberIfNonZero(root, "orientation", sizes.flip);
+    addNumberIfNonZero(root, "flip", sizes.flip);
+    cJSON_AddNumberToObject(root, "orientation", flipToExifOrientation(sizes.flip));
+    cJSON_AddStringToObject(root, "backend", "libraw");
     
     // Color info
     addNumberIfPositive(root, "colors", idata.colors);

@@ -153,6 +153,7 @@ endif()
 # Main JNI library
 add_library(${CMAKE_PROJECT_NAME} SHARED
     raw2dng_jni.cpp
+    libraw_backend.cpp
     dng_converter.cpp
     libraw_reader.cpp
     libraw_to_dng.cpp

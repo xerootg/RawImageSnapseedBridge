@@ -8,26 +8,12 @@
 #include <cstdint>
 #include <memory>
 
+#include "raw_backend.h"
+
 // Forward declare LibRaw to avoid header pollution
 class LibRaw;
 
 namespace raw2dng {
-
-// Chroma subsampling options for JPEG encoding
-// Higher subsampling = smaller file but color fringing artifacts
-enum class ChromaSubsampling {
-    SUBSAMP_444 = 0,  // No subsampling - best quality, largest file
-    SUBSAMP_422 = 1,  // Horizontal subsampling only - medium quality
-    SUBSAMP_420 = 2   // H and V subsampling - smallest file, most artifacts
-};
-
-// JPEG encoding settings for fine-grained control
-struct JpegEncodingSettings {
-    int quality = 95;                                              // Quality 1-100 (higher = better)
-    ChromaSubsampling subsampling = ChromaSubsampling::SUBSAMP_444; // Chroma subsampling
-    bool optimizeCoding = true;                                    // Huffman table optimization
-    bool progressive = false;                                       // Progressive JPEG (for web)
-};
 
 // Structure to hold extracted RAW metadata
 struct RawMetadata {
@@ -130,7 +116,8 @@ public:
     static bool extractThumbnail(const std::string& inputPath, 
                                  const std::string& outputPath,
                                  std::string& errorMessage,
-                                 int* outFlip = nullptr);
+                                 int* outFlip = nullptr,
+                                 PreviewResult* outResult = nullptr);
     
     // Static method to convert RAW to JPEG
     // Processes the RAW file and writes a full-resolution JPEG
@@ -138,14 +125,7 @@ public:
     static bool convertToJPEG(const std::string& inputPath,
                               const std::string& outputPath,
                               const JpegEncodingSettings& settings,
-                              std::string& errorMessage);
-    
-    // Convenience overload with individual parameters for JNI
-    static bool convertToJPEG(const std::string& inputPath,
-                              const std::string& outputPath,
-                              int quality,
-                              int chromaSubsampling,
-                              bool optimizeCoding,
+                              JpegResult& result,
                               std::string& errorMessage);
     
     // Static method to extract metadata from a RAW file as JSON string
