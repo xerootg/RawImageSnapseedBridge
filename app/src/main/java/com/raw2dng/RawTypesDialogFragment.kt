@@ -38,8 +38,7 @@ class RawTypesDialogFragment : DialogFragment() {
             "Fujifilm" to listOf("raf"),
             "Olympus / OM System" to listOf("orf", "ori"),
             "Panasonic / Lumix" to listOf("rw2"),
-            // DNG is excluded as it's an output format. you don't need this tool to convert DNG to DNG
-            // dng_sdk crashes when trying to convert DNG to DNG anyway.
+            // DNG is excluded as it's an output format; you don't need this tool to convert DNG to DNG.
             "Pentax" to listOf("pef"),
             "Samsung" to listOf("srw"),
             "Hasselblad" to listOf("3fr", "fff"),
