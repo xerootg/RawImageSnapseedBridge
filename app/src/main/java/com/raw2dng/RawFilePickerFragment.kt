@@ -12,10 +12,12 @@ import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
 import android.util.Log
+import android.widget.Toast
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
@@ -40,6 +42,9 @@ class RawFilePickerFragment : Fragment() {
     private lateinit var adapter: RawFileAdapter
     private var allRawFiles = mutableListOf<RawFileItem>()
     private var currentFilter: FileFilter = FileFilter.NOT_DNG
+    private var isLoadingFiles = false
+    /** Selection work requested while the RAW list was still loading. */
+    private var pendingSelectionAction: (() -> Unit)? = null
     private var hadPermissionsLastCheck = false
     private var lastConversionFormat: OutputFormat = OutputFormat.DNG
 
@@ -163,6 +168,44 @@ class RawFilePickerFragment : Fragment() {
         loadRawFiles()
     }
 
+    /** Run [action] now, or once the RAW list has finished loading. */
+    private fun whenFilesLoaded(action: () -> Unit) {
+        if (isLoadingFiles) {
+            pendingSelectionAction = action
+        } else {
+            action()
+        }
+    }
+
+    /**
+     * Resolve [uris] against the full, unfiltered RAW list and make sure they are
+     * selectable. Files that were already converted are dimmed or hidden by the
+     * default filters (the regenerate flow targets exactly those), so switch to
+     * "show all" whenever a requested file is not selectable as displayed.
+     */
+    private fun resolveForSelection(uris: List<Uri>): List<RawFileItem> {
+        val wanted = uris.toSet()
+        val items = allRawFiles.filter { it.uri in wanted }
+        if (items.isEmpty()) return items
+
+        val selectableNow = adapter.currentList.filter { !it.isDimmed }.map { it.uri }.toSet()
+        if (items.any { it.uri !in selectableNow }) {
+            currentFilter = FileFilter.ALL
+            binding.chipShowAll.isChecked = true
+            binding.chipNotDng.isChecked = false
+            binding.chipNotJpeg.isChecked = false
+            applyFilter()
+        }
+        return items
+    }
+
+    private fun scrollToFirstSelected(uri: Uri) {
+        val position = adapter.findPositionByUri(uri)
+        if (position >= 0) {
+            binding.rawFilesRecycler.scrollToPosition(position)
+        }
+    }
+
     /**
      * Select files by their URIs and scroll to the first selected file.
      * This is used when navigating from Gallery to re-convert specific files.
@@ -170,23 +213,19 @@ class RawFilePickerFragment : Fragment() {
      */
     fun selectFilesByUris(uris: List<Uri>) {
         if (_binding == null || uris.isEmpty()) return
-        
-        // Clear existing selection and select the specified files
-        val selectedCount = adapter.selectByUris(uris)
-        
-        if (selectedCount > 0) {
-            // Scroll to the first selected item
-            val firstUri = uris.first()
-            val position = adapter.findPositionByUri(firstUri)
-            if (position >= 0) {
-                binding.rawFilesRecycler.scrollToPosition(position)
+        whenFilesLoaded {
+            if (_binding == null) return@whenFilesLoaded
+            val items = resolveForSelection(uris)
+            if (items.isEmpty()) {
+                Toast.makeText(requireContext(), R.string.regenerate_no_raw_files, Toast.LENGTH_SHORT).show()
+                return@whenFilesLoaded
             }
-            
-            // Update the selection UI
+            adapter.selectByUris(items.map { it.uri })
+            scrollToFirstSelected(items.first().uri)
             updateSelectionUI()
         }
     }
-    
+
     /**
      * Select files by their URIs and immediately start conversion with the specified settings.
      * This is used by Gallery's regenerate feature to re-convert files.
@@ -206,25 +245,17 @@ class RawFilePickerFragment : Fragment() {
         jpegEmbeddedPolicy: Int = DNGConverter.DEFAULT_EMBEDDED_POLICY
     ) {
         if (_binding == null || uris.isEmpty()) return
-        
-        // Select the specified files
-        val selectedCount = adapter.selectByUris(uris)
-        
-        if (selectedCount > 0) {
-            // Scroll to the first selected item
-            val firstUri = uris.first()
-            val position = adapter.findPositionByUri(firstUri)
-            if (position >= 0) {
-                binding.rawFilesRecycler.scrollToPosition(position)
+        whenFilesLoaded {
+            if (_binding == null) return@whenFilesLoaded
+            val items = resolveForSelection(uris)
+            if (items.isEmpty()) {
+                Toast.makeText(requireContext(), R.string.regenerate_no_raw_files, Toast.LENGTH_SHORT).show()
+                return@whenFilesLoaded
             }
-            
-            // Get the selected RawFileItems
-            val selectedFiles = adapter.getSelectedItems()
-            
-            if (selectedFiles.isNotEmpty()) {
-                // Start conversion with the specified settings
-                startConversionWithSettings(selectedFiles, outputFormat, jpegQuality, jpegChroma, jpegOptimize, jpegEmbeddedPolicy)
-            }
+            adapter.selectByUris(items.map { it.uri })
+            scrollToFirstSelected(items.first().uri)
+            updateSelectionUI()
+            startConversionWithSettings(items, outputFormat, jpegQuality, jpegChroma, jpegOptimize, jpegEmbeddedPolicy)
         }
     }
 
@@ -376,14 +407,19 @@ class RawFilePickerFragment : Fragment() {
         binding.emptyText.visibility = View.GONE
         binding.rawFilesRecycler.visibility = View.GONE
 
-        lifecycleScope.launch {
-            val files = withContext(Dispatchers.IO) {
-                queryRawFiles()
+        isLoadingFiles = true
+        viewLifecycleOwner.lifecycleScope.launch {
+            val files = try {
+                withContext(Dispatchers.IO) { queryRawFiles() }
+            } finally {
+                isLoadingFiles = false
             }
 
             allRawFiles.clear()
             allRawFiles.addAll(files)
 
+            // The view may have gone away while the query ran.
+            if (_binding == null) return@launch
             binding.loadingProgress.visibility = View.GONE
 
             if (files.isEmpty()) {
@@ -397,11 +433,17 @@ class RawFilePickerFragment : Fragment() {
             }
 
             Log.d(tag, "Loaded ${files.size} RAW files")
+
+            pendingSelectionAction?.let { action ->
+                pendingSelectionAction = null
+                action()
+            }
         }
     }
 
     private fun queryRawFiles(): List<RawFileItem> {
         val files = mutableListOf<RawFileItem>()
+        if (context == null) return files
 
         val projection = arrayOf(
             MediaStore.Images.Media._ID,
@@ -650,7 +692,7 @@ class RawFilePickerFragment : Fragment() {
                 OutputFormat.DNG -> rawFile.isConvertedToDng
                 OutputFormat.JPEG -> rawFile.isConvertedToJpeg
             }
-            val targetFileName = rawFile.name.substringBeforeLast('.') + "." + extension
+            val targetFileName = FileNames.baseName(rawFile.name) + "." + extension
             ConversionThumbnailItem(
                 uri = rawFile.uri,
                 fileName = targetFileName,
@@ -679,7 +721,7 @@ class RawFilePickerFragment : Fragment() {
                 val fileName = rawFile.name
                 val uniqueId = UUID.randomUUID().toString().take(8)
                 val inputPath = copyUriToCache(uri, fileName, uniqueId)
-                val outputFileName = fileName.substringBeforeLast('.') + "_${uniqueId}.$extension"
+                val outputFileName = FileNames.baseName(fileName) + "_${uniqueId}.$extension"
                 val outputPath = File(requireContext().cacheDir, outputFileName).absolutePath
                 
                 val task = ConversionTask(uri, inputPath, outputPath, fileName, outputFormat)
@@ -699,7 +741,7 @@ class RawFilePickerFragment : Fragment() {
                 val fileName = rawFile.name
                 val uniqueId = UUID.randomUUID().toString().take(8)
                 val inputPath = copyUriToCache(rawFile.uri, fileName, uniqueId)
-                val outputFileName = fileName.substringBeforeLast('.') + "_${uniqueId}.$extension"
+                val outputFileName = FileNames.baseName(fileName) + "_${uniqueId}.$extension"
                 val outputPath = File(requireContext().cacheDir, outputFileName).absolutePath
 
                 ConversionTask(rawFile.uri, inputPath, outputPath, fileName, outputFormat)
@@ -712,6 +754,9 @@ class RawFilePickerFragment : Fragment() {
             }
         }
 
+        // A previous queue (e.g. a batch that is still finishing) must not keep
+        // its workers and callbacks alive next to the new one.
+        conversionQueue?.cancel()
         conversionQueue = ConversionQueue(
             converter = converter,
             onTaskStarting = { task, _, _ ->
@@ -733,7 +778,7 @@ class RawFilePickerFragment : Fragment() {
                     
                     if (result.success) {
                         // Use original filename (without UUID) for public storage
-                        val originalBaseName = result.task.fileName.substringBeforeLast('.')
+                        val originalBaseName = FileNames.baseName(result.task.fileName)
                         val outputExtension = if (result.task.outputFormat == OutputFormat.DNG) "dng" else "jpg"
                         val publicFileName = "$originalBaseName.$outputExtension"
                         
@@ -1022,23 +1067,29 @@ class RawFilePickerFragment : Fragment() {
      * @return Path to the cached file
      */
     private fun copyUriToCache(uri: Uri, fileName: String, uniqueId: String): String {
-        val extension = fileName.substringAfterLast('.', "")
-        val baseName = fileName.substringBeforeLast('.')
-        val uniqueFileName = "${baseName}_${uniqueId}.$extension"
+        // The display name comes from another app's content provider; it must
+        // never become anything but a single file-name component inside cacheDir.
+        val safeName = FileNames.sanitize(fileName)
+        val extension = safeName.substringAfterLast('.', "")
+        val baseName = safeName.substringBeforeLast('.')
+        val uniqueFileName = if (extension.isEmpty()) "${baseName}_$uniqueId" else "${baseName}_${uniqueId}.$extension"
         val cacheFile = File(requireContext().cacheDir, uniqueFileName)
-        requireContext().contentResolver.openInputStream(uri)?.use { input ->
+        val input = requireContext().contentResolver.openInputStream(uri)
+            ?: throw java.io.IOException("Cannot open $safeName")
+        input.use { source ->
             FileOutputStream(cacheFile).use { output ->
-                input.copyTo(output)
+                source.copyTo(output)
             }
         }
         return cacheFile.absolutePath
     }
 
     private fun saveToPublicStorage(sourceFile: File, outputFormat: OutputFormat = OutputFormat.DNG, displayName: String = sourceFile.name): SaveResult {
+        val safeName = FileNames.sanitize(displayName)
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            saveToMediaStore(sourceFile, outputFormat, displayName)
+            saveToMediaStore(sourceFile, outputFormat, safeName)
         } else {
-            saveToPublicDirectory(sourceFile, outputFormat, displayName)
+            saveToPublicDirectory(sourceFile, outputFormat, safeName)
         }
     }
 
@@ -1165,7 +1216,10 @@ class RawFilePickerFragment : Fragment() {
                 Log.d(tag, "MediaScanner scanned: $path -> $uri")
             }
 
-            SaveResult.Success(Uri.fromFile(destFile))
+            // file:// URIs are rejected by other apps' intents; expose the file
+            // through our FileProvider instead.
+            val ctx = requireContext()
+            SaveResult.Success(FileProvider.getUriForFile(ctx, "${ctx.packageName}.fileprovider", destFile))
         } catch (e: Exception) {
             Log.e(tag, "Error saving to public directory", e)
             SaveResult.Failed

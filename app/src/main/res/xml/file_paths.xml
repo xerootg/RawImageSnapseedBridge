@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Paths exposed through the app's FileProvider for pre-Android-10 devices,
+     where the converted files live in the public Pictures directory and must
+     not be handed to other apps as file:// URIs. -->
+<paths>
+    <external-path name="raw2dng_pictures" path="Pictures/Raw2DNG/" />
+</paths>
