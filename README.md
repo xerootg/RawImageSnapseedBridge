@@ -14,6 +14,13 @@ Most RAW files carry the full-resolution JPEG the camera rendered. JPEG export r
 - ✅ Overwrite confirmation for already-converted files
 - ✅ Complete EXIF/metadata preservation in both DNG and JPEG output
 
+### Sources
+- ✅ Convert straight from a camera plugged in over USB (PTP/MTP), with camera thumbnails and no card juggling
+- ✅ Convert from USB drives, card readers and any folder (Storage Access Framework)
+- ✅ Convert from your [RapidRawCloud](https://github.com/xerootg/RapidRawCloud) library (read-only S3 client, cloud thumbnails) with one-tap pairing
+- ✅ Conversion tracking by file identity in a local ledger: the camera, card or bucket is never written to
+- See [docs/SOURCES.md](docs/SOURCES.md) for the source abstraction and the PTP/IP and camera-settings extension points
+
 ### File Management
 - ✅ Browse RAW files with thumbnail previews
 - ✅ Filter chips: All / Not DNG / Not JPEG

@@ -267,15 +267,18 @@ object ThumbnailCache {
         return try {
             when (uri.scheme) {
                 "file" -> uri.path
-                "content" -> {
+                "content" -> if (com.raw2dng.source.SourceContentProvider.isSourceUri(uri)) {
+                    // A camera / cloud object: transfer it into the fetch cache once.
+                    kotlinx.coroutines.runBlocking { com.raw2dng.source.SourceRegistry.materialize(context, uri) }?.absolutePath
+                } else {
                     // Query for DATA column
                     val projection = arrayOf(android.provider.MediaStore.Images.Media.DATA)
                     context.contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
                         if (cursor.moveToFirst()) {
-                            val columnIndex = cursor.getColumnIndexOrThrow(android.provider.MediaStore.Images.Media.DATA)
-                            cursor.getString(columnIndex)
+                            val columnIndex = cursor.getColumnIndex(android.provider.MediaStore.Images.Media.DATA)
+                            if (columnIndex >= 0) cursor.getString(columnIndex) else null
                         } else null
-                    }
+                    } ?: copyToTemp(context, uri)
                 }
                 else -> null
             }
@@ -285,6 +288,28 @@ object ThumbnailCache {
         }
     }
     
+    /**
+     * SAF documents and other providers have no file path: copy the bytes into
+     * the fetch cache directory so the native backend can read them.
+     */
+    private fun copyToTemp(context: Context, uri: Uri): String? {
+        return try {
+            val dir = File(context.cacheDir, "source_fetch").apply { mkdirs() }
+            val name = uri.lastPathSegment?.substringAfterLast('/')?.substringAfterLast(':') ?: "doc"
+            val ext = name.substringAfterLast('.', "").ifEmpty { "raw" }
+            val f = File(dir, getCacheKey(uri) + "." + ext)
+            if (!f.exists() || f.length() == 0L) {
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    f.outputStream().use { input.copyTo(it) }
+                } ?: return null
+            }
+            f.absolutePath
+        } catch (e: Exception) {
+            Log.e(TAG, "Error copying $uri for thumbnail extraction", e)
+            null
+        }
+    }
+
     /**
      * Calculate sample size for downscaling
      */

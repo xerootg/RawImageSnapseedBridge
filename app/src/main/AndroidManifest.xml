@@ -8,6 +8,12 @@
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28"
         tools:ignore="ScopedStorage" />
+    <!-- RapidRawCloud source (S3) and pairing -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- Cameras over USB (PTP/MTP). Optional: the app works without USB host support. -->
+    <uses-feature android:name="android.hardware.usb.host" android:required="false" />
 
     <!-- Required on Android 11+ to query if Snapseed is installed -->
     <queries>
@@ -31,7 +37,35 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Offer Raw2DNG when a PTP/MTP camera is plugged in (see res/xml/usb_device_filter.xml) -->
+            <intent-filter>
+                <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
+                android:resource="@xml/usb_device_filter" />
         </activity>
+
+        <!-- RapidRawCloud pairing: the identity provider redirects here after login -->
+        <activity
+            android:name=".rrc.PairingCallbackActivity"
+            android:exported="true"
+            android:theme="@style/Theme.Raw2DNG"
+            android:launchMode="singleTask">
+            <intent-filter android:autoVerify="false">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="raw2dng" android:host="auth-callback" />
+            </intent-filter>
+        </activity>
+
+        <!-- Every RAW source entry (camera object, cloud object, ...) is addressable as a content URI -->
+        <provider
+            android:name=".source.SourceContentProvider"
+            android:authorities="com.raw2dng.sources"
+            android:exported="false"
+            android:grantUriPermissions="true" />
     </application>
 
 </manifest>

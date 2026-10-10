@@ -1,13 +1,60 @@
 package com.raw2dng
 
+import android.content.Context
+import android.net.Uri
+import android.os.Build
 import android.os.Environment
+import android.provider.MediaStore
 import java.io.File
 
 /**
- * Helper to check which files have already been converted.
- * Uses the existence of .dng/.jpg files in Pictures/Raw2DNG as the source of truth.
+ * Helper for the output folder layout (Pictures/Raw2DNG and Raw2DNG/JPEG).
+ *
+ * Historically "is this RAW converted?" was answered purely by whether a
+ * `<base>.dng` / `<base>.jpg` exists here. That is now only the *legacy
+ * fallback*: the conversion ledger (`com.raw2dng.ledger.ConversionLedger`)
+ * is the source of truth, keyed by file identity rather than name, and it
+ * adopts pre-ledger outputs through [findOutputUri] the first time it sees
+ * them.
  */
 object ConvertedFilesHelper {
+
+    val DNG_RELATIVE_PATH: String = "${Environment.DIRECTORY_PICTURES}/Raw2DNG"
+    val JPEG_RELATIVE_PATH: String = "${Environment.DIRECTORY_PICTURES}/Raw2DNG/JPEG"
+
+    fun relativePathFor(format: OutputFormat): String = when (format) {
+        OutputFormat.DNG -> DNG_RELATIVE_PATH
+        OutputFormat.JPEG -> JPEG_RELATIVE_PATH
+    }
+
+    fun mimeTypeFor(format: OutputFormat): String = when (format) {
+        OutputFormat.DNG -> "image/x-adobe-dng"
+        OutputFormat.JPEG -> "image/jpeg"
+    }
+
+    /**
+     * The URI of an existing output named like the conversion of [originalFileName],
+     * or null. Used to adopt outputs produced before the ledger existed.
+     */
+    fun findOutputUri(context: Context, originalFileName: String, format: OutputFormat): Uri? {
+        val outputName = getOutputFileName(originalFileName, format)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val collection = MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+            val selection = "${MediaStore.Images.Media.DISPLAY_NAME} = ? AND ${MediaStore.Images.Media.RELATIVE_PATH} = ?"
+            context.contentResolver.query(
+                collection, arrayOf(MediaStore.Images.Media._ID), selection,
+                arrayOf(outputName, relativePathFor(format) + "/"), null
+            )?.use { c ->
+                if (c.moveToFirst()) {
+                    return Uri.withAppendedPath(collection, c.getLong(0).toString())
+                }
+            }
+            return null
+        }
+        val dir = if (format == OutputFormat.DNG) raw2dngDir else jpegDir
+        val f = File(dir, outputName)
+        return if (f.exists()) Uri.fromFile(f) else null
+    }
     
     private val raw2dngDir: File
         get() {
