@@ -34,6 +34,12 @@ const char* optionalCStr(const std::string& s) {
 
 constexpr const char* kSoftware = "Raw2DNG (dnglab)";
 
+// Basename for logs: full paths describe the user's photo library.
+std::string baseName(const std::string& path) {
+    const size_t slash = path.find_last_of('/');
+    return slash == std::string::npos ? path : path.substr(slash + 1);
+}
+
 } // namespace
 
 DnglabBackend::DnglabBackend() {
@@ -86,7 +92,7 @@ bool DnglabBackend::convertToDNG(const std::string& inputPath,
     int32_t rc = dnglab_convert_to_dng(inputPath.c_str(), outputPath.c_str(), &opts, &err);
     if (rc != DNGLAB_OK) {
         errorMessage = takeError(err, "DNG conversion failed");
-        LOGE("convertToDNG(%s) failed: %s", inputPath.c_str(), errorMessage.c_str());
+        LOGE("convertToDNG(%s) failed: %s", baseName(inputPath).c_str(), errorMessage.c_str());
         return false;
     }
     return true;
@@ -113,7 +119,7 @@ bool DnglabBackend::convertToJPEG(const std::string& inputPath,
     int32_t rc = dnglab_convert_to_jpeg(inputPath.c_str(), outputPath.c_str(), &opts, &res, &err);
     if (rc != DNGLAB_OK) {
         errorMessage = takeError(err, "JPEG conversion failed");
-        LOGE("convertToJPEG(%s) failed: %s", inputPath.c_str(), errorMessage.c_str());
+        LOGE("convertToJPEG(%s) failed: %s", baseName(inputPath).c_str(), errorMessage.c_str());
         return false;
     }
     result.usedEmbeddedJpeg = res.used_embedded != 0;
@@ -121,7 +127,7 @@ bool DnglabBackend::convertToJPEG(const std::string& inputPath,
     result.height = static_cast<int>(res.height);
     result.orientation = res.orientation;
     result.exifEmbedded = res.exif_embedded != 0;
-    LOGD("convertToJPEG(%s): %s %dx%d orientation=%d", inputPath.c_str(),
+    LOGD("convertToJPEG(%s): %s %dx%d orientation=%d", baseName(inputPath).c_str(),
          result.usedEmbeddedJpeg ? "embedded camera JPEG" : "rendered", result.width, result.height,
          result.orientation);
     return true;
@@ -134,12 +140,15 @@ bool DnglabBackend::extractPreview(const std::string& inputPath,
                                    std::string& errorMessage) {
     dnglab_preview_result res{};
     char* err = nullptr;
+    if (maxDimension < 0) {
+        errorMessage = "maxDimension must not be negative";
+        return false;
+    }
     int32_t rc = dnglab_extract_preview(inputPath.c_str(), outputPath.c_str(),
-                                        maxDimension > 0 ? static_cast<uint32_t>(maxDimension) : 0u,
-                                        &res, &err);
+                                        static_cast<uint32_t>(maxDimension), &res, &err);
     if (rc != DNGLAB_OK) {
         errorMessage = takeError(err, "Preview extraction failed");
-        LOGE("extractPreview(%s) failed: %s", inputPath.c_str(), errorMessage.c_str());
+        LOGE("extractPreview(%s) failed: %s", baseName(inputPath).c_str(), errorMessage.c_str());
         return false;
     }
     result.orientation = res.orientation;
@@ -156,7 +165,7 @@ bool DnglabBackend::extractMetadataJson(const std::string& inputPath,
     char* json = dnglab_metadata_json(inputPath.c_str(), &err);
     if (!json) {
         errorMessage = takeError(err, "Metadata extraction failed");
-        LOGE("extractMetadataJson(%s) failed: %s", inputPath.c_str(), errorMessage.c_str());
+        LOGE("extractMetadataJson(%s) failed: %s", baseName(inputPath).c_str(), errorMessage.c_str());
         return false;
     }
     jsonOutput = json;
