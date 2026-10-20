@@ -21,6 +21,7 @@ import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
@@ -114,6 +115,21 @@ class GalleryFragment : Fragment() {
     }
 
     private fun setupUI() {
+        // Regenerate settings arrive through the Fragment Result API so that a
+        // configuration change while the dialog is open does not lose them.
+        childFragmentManager.setFragmentResultListener(RegenerateDialog.REQUEST_KEY, viewLifecycleOwner) { _, result ->
+            val request = RegenerateDialog.parseResult(result) ?: return@setFragmentResultListener
+            adapter.clearSelection()
+            (activity as? MainActivity)?.navigateToConvertAndStart(
+                request.rawUris,
+                request.outputFormat,
+                request.jpegQuality,
+                request.jpegChroma,
+                request.jpegOptimize,
+                request.jpegEmbeddedPolicy
+            )
+        }
+
         adapter = GalleryAdapter(
             onItemClick = { item ->
                 openImageWith(item)
@@ -207,18 +223,16 @@ class GalleryFragment : Fragment() {
         )
         currentPreviewDialog = dialog
         
-        dialog.show(childFragmentManager, "gallery_preview")
-        
-        // Use fragment lifecycle to detect when dialog is dismissed
-        childFragmentManager.executePendingTransactions()
-        dialog.dialog?.setOnDismissListener {
-            // Sync selection state from dialog back to adapter
-            currentPreviewDialog?.let { previewDialog ->
-                val finalSelection = previewDialog.getSelectedUris()
-                adapter.setSelectionFromUris(finalSelection)
+        // Sync selection state from dialog back to adapter when it closes. The
+        // DialogFragment installs its own dismiss listener on the Dialog, so hook
+        // the fragment-level callback instead of replacing that listener.
+        dialog.onDismissed = {
+            if (_binding != null) {
+                adapter.setSelectionFromUris(dialog.getSelectedUris())
             }
             currentPreviewDialog = null
         }
+        dialog.show(childFragmentManager, "gallery_preview")
     }
     
     private fun previewSelectedImages() {
@@ -258,18 +272,16 @@ class GalleryFragment : Fragment() {
         )
         currentPreviewDialog = dialog
         
-        dialog.show(childFragmentManager, "gallery_preview")
-        
-        // Use fragment lifecycle to detect when dialog is dismissed
-        childFragmentManager.executePendingTransactions()
-        dialog.dialog?.setOnDismissListener {
-            // Sync selection state from dialog back to adapter
-            currentPreviewDialog?.let { previewDialog ->
-                val finalSelection = previewDialog.getSelectedUris()
-                adapter.setSelectionFromUris(finalSelection)
+        // Sync selection state from dialog back to adapter when it closes. The
+        // DialogFragment installs its own dismiss listener on the Dialog, so hook
+        // the fragment-level callback instead of replacing that listener.
+        dialog.onDismissed = {
+            if (_binding != null) {
+                adapter.setSelectionFromUris(dialog.getSelectedUris())
             }
             currentPreviewDialog = null
         }
+        dialog.show(childFragmentManager, "gallery_preview")
     }
     
     private fun deleteSelectedImages() {
@@ -454,11 +466,7 @@ class GalleryFragment : Fragment() {
                     ?.forEach { file ->
                         Log.d(tag, "Adding DNG file: ${file.name}")
                         
-                        val uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                            getContentUriForFile(file) ?: Uri.fromFile(file)
-                        } else {
-                            Uri.fromFile(file)
-                        }
+                        val uri = getContentUriForFile(file) ?: shareableUriForFile(file)
                         
                         items.add(
                             GalleryItem(
@@ -481,11 +489,7 @@ class GalleryFragment : Fragment() {
                     ?.forEach { file ->
                         Log.d(tag, "Adding JPEG file: ${file.name}")
                         
-                        val uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                            getContentUriForFile(file) ?: Uri.fromFile(file)
-                        } else {
-                            Uri.fromFile(file)
-                        }
+                        val uri = getContentUriForFile(file) ?: shareableUriForFile(file)
                         
                         items.add(
                             GalleryItem(
@@ -545,19 +549,32 @@ class GalleryFragment : Fragment() {
     private fun openImageWith(item: GalleryItem) {
         try {
             val intent = Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(item.uri, "image/x-adobe-dng")
+                setDataAndType(item.uri, mimeTypeFor(item.name))
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
-            
+
             val chooser = Intent.createChooser(intent, getString(R.string.open_with)).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             startActivity(chooser)
         } catch (e: Exception) {
             Log.e(tag, "Error opening image", e)
-            Toast.makeText(requireContext(), "No app found to open DNG files", Toast.LENGTH_SHORT).show()
+            Toast.makeText(requireContext(), "No app found to open this file", Toast.LENGTH_SHORT).show()
         }
+    }
+
+    private fun mimeTypeFor(name: String): String {
+        return when (name.substringAfterLast('.', "").lowercase()) {
+            "jpg", "jpeg" -> "image/jpeg"
+            else -> "image/x-adobe-dng"
+        }
+    }
+
+    /** A content:// URI for one of our own output files that other apps may open. */
+    private fun shareableUriForFile(file: File): Uri {
+        val ctx = context ?: return Uri.fromFile(file)
+        return FileProvider.getUriForFile(ctx, "${ctx.packageName}.fileprovider", file)
     }
 
     private fun showClearFolderConfirmation() {
@@ -818,31 +835,8 @@ class GalleryFragment : Fragment() {
                 ).show()
             }
             
-            // Show the regenerate dialog to get format and settings
-            val dialog = RegenerateDialog.newInstance()
-            dialog.setOnRegenerateListener(object : RegenerateDialog.OnRegenerateListener {
-                override fun onRegenerate(
-                    outputFormat: OutputFormat,
-                    jpegQuality: Int,
-                    jpegChroma: Int,
-                    jpegOptimize: Boolean,
-                    jpegEmbeddedPolicy: Int
-                ) {
-                    // Clear selection before navigating
-                    adapter.clearSelection()
-                    
-                    // Navigate to Convert tab and start conversion with the selected settings
-                    (activity as? MainActivity)?.navigateToConvertAndStart(
-                        rawUris,
-                        outputFormat,
-                        jpegQuality,
-                        jpegChroma,
-                        jpegOptimize,
-                        jpegEmbeddedPolicy
-                    )
-                }
-            })
-            dialog.show(childFragmentManager, RegenerateDialog.TAG)
+            // Show the regenerate dialog; its result is handled in setupUI().
+            RegenerateDialog.newInstance(rawUris).show(childFragmentManager, RegenerateDialog.TAG)
         }
     }
     
@@ -863,7 +857,8 @@ class GalleryFragment : Fragment() {
         
         // Search for each RAW extension
         for (ext in rawExtensions) {
-            val selection = "${MediaStore.Images.Media.DISPLAY_NAME} LIKE ?"
+            // Exact match: with LIKE, '_' and '%' in a base name act as wildcards.
+            val selection = "${MediaStore.Images.Media.DISPLAY_NAME} = ?"
             val selectionArgs = arrayOf("$baseName.$ext")
             
             val cursor = contentResolver.query(
@@ -884,7 +879,8 @@ class GalleryFragment : Fragment() {
         
         // Also try uppercase extensions
         for (ext in rawExtensions) {
-            val selection = "${MediaStore.Images.Media.DISPLAY_NAME} LIKE ?"
+            // Exact match: with LIKE, '_' and '%' in a base name act as wildcards.
+            val selection = "${MediaStore.Images.Media.DISPLAY_NAME} = ?"
             val selectionArgs = arrayOf("$baseName.${ext.uppercase()}")
             
             val cursor = contentResolver.query(
@@ -908,6 +904,7 @@ class GalleryFragment : Fragment() {
     
     private fun saveToPublicStorage(sourceFile: File, format: OutputFormat, fileName: String) {
         val context = requireContext()
+        val safeName = FileNames.sanitize(fileName)
         
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             // Use MediaStore for Android 10+
@@ -922,13 +919,13 @@ class GalleryFragment : Fragment() {
             val mimeType = if (format == OutputFormat.DNG) "image/x-adobe-dng" else "image/jpeg"
             
             // Check if file already exists and delete it
-            val existingUri = findExistingFile(fileName, relativePath)
+            val existingUri = findExistingFile(safeName, relativePath)
             existingUri?.let {
                 context.contentResolver.delete(it, null, null)
             }
             
             val values = ContentValues().apply {
-                put(MediaStore.Images.Media.DISPLAY_NAME, fileName)
+                put(MediaStore.Images.Media.DISPLAY_NAME, safeName)
                 put(MediaStore.Images.Media.MIME_TYPE, mimeType)
                 put(MediaStore.Images.Media.RELATIVE_PATH, relativePath)
                 put(MediaStore.Images.Media.IS_PENDING, 1)
@@ -952,7 +949,7 @@ class GalleryFragment : Fragment() {
             val outputDir = if (format == OutputFormat.DNG) baseDir else File(baseDir, "JPEG")
             outputDir.mkdirs()
             
-            val destFile = File(outputDir, fileName)
+            val destFile = File(outputDir, safeName)
             sourceFile.copyTo(destFile, overwrite = true)
             
             MediaScannerConnection.scanFile(context, arrayOf(destFile.absolutePath), null, null)

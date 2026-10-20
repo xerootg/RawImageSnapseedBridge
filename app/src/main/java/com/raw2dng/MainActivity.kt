@@ -20,9 +20,14 @@ import com.raw2dng.databinding.ActivityMainTabsBinding
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainTabsBinding
-    private var galleryFragment: GalleryFragment? = null
-    private var pickerFragment: RawFilePickerFragment? = null
-    private var settingsFragment: SettingsFragment? = null
+
+    // FragmentStateAdapter tags its fragments "f<itemId>" and does not call
+    // createFragment() again after the activity is recreated, so cached
+    // references would be stale (null) then. Always resolve the live instance.
+    private val galleryFragment: GalleryFragment?
+        get() = supportFragmentManager.findFragmentByTag("f$TAB_GALLERY") as? GalleryFragment
+    private val pickerFragment: RawFilePickerFragment?
+        get() = supportFragmentManager.findFragmentByTag("f$TAB_CONVERT") as? RawFilePickerFragment
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -37,11 +42,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun refreshPickerFragment() {
-        // Find the RawFilePickerFragment and refresh it
-        val fragment = supportFragmentManager.fragments
-            .filterIsInstance<RawFilePickerFragment>()
-            .firstOrNull()
-        fragment?.refreshFiles()
+        pickerFragment?.refreshFiles()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -128,11 +129,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun navigateToGallery() {
-        binding.viewPager.currentItem = 1
+        binding.viewPager.currentItem = TAB_GALLERY
     }
     
     fun navigateToGallery(filterFormat: OutputFormat) {
-        binding.viewPager.currentItem = 1
+        binding.viewPager.currentItem = TAB_GALLERY
         // Use post to ensure the fragment is fully visible before setting filter
         binding.viewPager.post {
             galleryFragment?.setFilter(filterFormat)
@@ -145,7 +146,7 @@ class MainActivity : AppCompatActivity() {
      * @param rawUris The URIs of the RAW files to select
      */
     fun navigateToConvertWithSelection(rawUris: List<Uri>) {
-        binding.viewPager.currentItem = 0
+        binding.viewPager.currentItem = TAB_CONVERT
         // Use post to ensure the fragment is fully visible before selecting
         binding.viewPager.post {
             pickerFragment?.selectFilesByUris(rawUris)
@@ -170,7 +171,7 @@ class MainActivity : AppCompatActivity() {
         jpegOptimize: Boolean = true,
         jpegEmbeddedPolicy: Int = DNGConverter.DEFAULT_EMBEDDED_POLICY
     ) {
-        binding.viewPager.currentItem = 0
+        binding.viewPager.currentItem = TAB_CONVERT
         // Use post to ensure the fragment is fully visible before selecting and starting
         binding.viewPager.post {
             pickerFragment?.selectFilesAndStartConversion(rawUris, outputFormat, jpegQuality, jpegChroma, jpegOptimize, jpegEmbeddedPolicy)
@@ -182,20 +183,17 @@ class MainActivity : AppCompatActivity() {
 
         override fun createFragment(position: Int): Fragment {
             return when (position) {
-                0 -> {
-                    pickerFragment = RawFilePickerFragment.newInstance()
-                    pickerFragment!!
-                }
-                1 -> {
-                    galleryFragment = GalleryFragment()
-                    galleryFragment!!
-                }
-                2 -> {
-                    settingsFragment = SettingsFragment.newInstance()
-                    settingsFragment!!
-                }
+                TAB_CONVERT -> RawFilePickerFragment.newInstance()
+                TAB_GALLERY -> GalleryFragment()
+                TAB_SETTINGS -> SettingsFragment.newInstance()
                 else -> RawFilePickerFragment.newInstance()
             }
         }
+    }
+
+    companion object {
+        private const val TAB_CONVERT = 0
+        private const val TAB_GALLERY = 1
+        private const val TAB_SETTINGS = 2
     }
 }

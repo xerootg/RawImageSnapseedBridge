@@ -3,6 +3,7 @@ package com.raw2dng
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.DialogInterface
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -61,6 +62,9 @@ class ImagePreviewDialog : DialogFragment() {
     private var selectionChangeListener: OnSelectionChangeListener? = null
     private var convertRequestedListener: OnConvertRequestedListener? = null
     private var openWithRequestedListener: OnOpenWithRequestedListener? = null
+
+    /** Invoked after the dialog has been dismissed, whichever way it was closed. */
+    var onDismissed: (() -> Unit)? = null
 
     private lateinit var thumbnailStripAdapter: ThumbnailStripAdapter
     private lateinit var imagePagerAdapter: ImagePagerAdapter
@@ -787,6 +791,11 @@ class ImagePreviewDialog : DialogFragment() {
      * Useful for syncing selection state after dialog is dismissed.
      */
     fun getSelectedUris(): Set<Uri> = selectedUris.toSet()
+
+    override fun onDismiss(dialog: DialogInterface) {
+        super.onDismiss(dialog)
+        onDismissed?.invoke()
+    }
 
     override fun onStart() {
         super.onStart()

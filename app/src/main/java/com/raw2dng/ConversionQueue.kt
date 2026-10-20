@@ -2,9 +2,15 @@ package com.raw2dng
 
 import android.net.Uri
 import android.util.Log
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicInteger
 
 data class ConversionTask(
@@ -25,7 +31,14 @@ data class ConversionResult(
 
 /**
  * Manages parallel conversion of RAW files.
- * 
+ *
+ * Tasks are fed through an unbounded channel to a fixed pool of workers. The
+ * channel stays open for the whole life of the queue, so tasks may be added at
+ * any time (for example after the user confirms an overwrite) even after an
+ * earlier batch has finished; [onAllComplete] is reported once for every point
+ * at which all tasks known so far have completed. [cancel] closes the channel
+ * and stops the workers.
+ *
  * @param parallelism Maximum number of concurrent conversions (default: 2)
  * @param jpegQuality JPEG quality (1-100)
  * @param jpegChroma Chroma subsampling mode
@@ -37,7 +50,7 @@ class ConversionQueue(
     private val onTaskStarting: (task: ConversionTask, current: Int, total: Int) -> Unit,
     private val onTaskComplete: (ConversionResult) -> Unit,
     private val onAllComplete: (successful: Int, failed: Int) -> Unit,
-    private val parallelism: Int = DEFAULT_PARALLELISM,
+    parallelism: Int = DEFAULT_PARALLELISM,
     private val jpegQuality: Int = DNGConverter.DEFAULT_QUALITY,
     private val jpegChroma: Int = DNGConverter.DEFAULT_SUBSAMPLING,
     private val jpegOptimize: Boolean = DNGConverter.DEFAULT_OPTIMIZE,
@@ -45,106 +58,111 @@ class ConversionQueue(
 ) {
     companion object {
         private const val TAG = "ConversionQueue"
-        
+
         /**
          * Default degree of parallelism for conversions.
          * This can be configured via Settings (1 to number of CPU cores).
          */
         const val DEFAULT_PARALLELISM = 2
     }
-    
+
+    private val parallelism = parallelism.coerceAtLeast(1)
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val tasks = mutableListOf<ConversionTask>()
     private val taskChannel = Channel<ConversionTask>(Channel.UNLIMITED)
-    private val semaphore = Semaphore(parallelism)
-    
+
+    @Volatile
     private var isProcessing = false
+    @Volatile
+    private var isCancelled = false
     private var processingJob: Job? = null
-    
+
     // Thread-safe counters
     private val startedCount = AtomicInteger(0)
     private val completedCount = AtomicInteger(0)
     private val successfulCount = AtomicInteger(0)
     private val failedCount = AtomicInteger(0)
 
+    /** Completed-task count at which [onAllComplete] was last reported, so it fires once per completion point. */
+    private val reportedCompletion = AtomicInteger(-1)
+
     fun addTasks(newTasks: List<ConversionTask>) {
         synchronized(tasks) {
             tasks.addAll(newTasks)
         }
     }
-    
+
     /**
-     * Add a single task dynamically. Will be picked up by workers if processing.
+     * Add a single task dynamically. Picked up by the workers immediately when
+     * processing has started, otherwise when [start] is called.
      */
     fun addTaskDynamic(task: ConversionTask) {
+        if (isCancelled) {
+            Log.w(TAG, "Ignoring task ${task.fileName}: queue is cancelled")
+            return
+        }
         Log.d(TAG, "Adding dynamic task: ${task.fileName}")
         synchronized(tasks) {
             tasks.add(task)
         }
-        
-        // Send to channel for processing
-        scope.launch {
-            taskChannel.send(task)
-        }
-        
-        // If not currently processing, start processing
+
         if (!isProcessing) {
+            // start() will enqueue everything in `tasks`, including this one.
             Log.d(TAG, "Starting processing for dynamic task")
-            startProcessing()
+            start()
+            return
+        }
+        if (!taskChannel.trySend(task).isSuccess) {
+            Log.e(TAG, "Could not enqueue ${task.fileName}: channel closed")
         }
     }
-    
+
     private fun startProcessing() {
         if (isProcessing) return
-        
         isProcessing = true
-        
+
         processingJob = scope.launch {
             Log.d(TAG, "Starting parallel processing with parallelism=$parallelism")
-            
-            // Launch worker coroutines
+
+            // Launch worker coroutines. They run until the channel is closed by cancel().
             val workers = (1..parallelism).map { workerId ->
                 launch {
                     Log.d(TAG, "Worker $workerId started")
                     for (task in taskChannel) {
-                        semaphore.acquire()
-                        try {
-                            processTask(task, workerId)
-                        } finally {
-                            semaphore.release()
-                        }
-                        
-                        // Check if all tasks are complete
+                        processTask(task, workerId)
                         checkCompletion()
                     }
                     Log.d(TAG, "Worker $workerId finished")
                 }
             }
-            
-            // Wait for all workers to complete
+
             workers.forEach { it.join() }
-            
             isProcessing = false
             Log.d(TAG, "All workers completed")
         }
     }
-    
+
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     private suspend fun checkCompletion() {
         val totalTasks = synchronized(tasks) { tasks.size }
         val completed = completedCount.get()
-        
+
         if (completed >= totalTasks && taskChannel.isEmpty) {
-            // All tasks done, close channel and report
-            taskChannel.close()
-            
-            withContext(Dispatchers.Main) {
-                onAllComplete(successfulCount.get(), failedCount.get())
+            // Several workers can observe the same completion point; report it once.
+            val lastReported = reportedCompletion.get()
+            if (completed > lastReported && reportedCompletion.compareAndSet(lastReported, completed)) {
+                withContext(Dispatchers.Main) {
+                    onAllComplete(successfulCount.get(), failedCount.get())
+                }
             }
         }
     }
 
     fun start() {
+        if (isCancelled) {
+            Log.w(TAG, "Queue is cancelled, cannot start")
+            return
+        }
         if (isProcessing) {
             Log.w(TAG, "Queue is already processing")
             return
@@ -155,25 +173,32 @@ class ConversionQueue(
         completedCount.set(0)
         successfulCount.set(0)
         failedCount.set(0)
-        
+        reportedCompletion.set(-1)
+
         // Copy tasks to avoid holding lock during send
         val tasksCopy = synchronized(tasks) { tasks.toList() }
-        
-        // Send all tasks to channel
-        scope.launch {
-            tasksCopy.forEach { task ->
-                taskChannel.send(task)
+
+        startProcessing()
+
+        // trySend on an unbounded channel never suspends and preserves order.
+        tasksCopy.forEach { task ->
+            if (!taskChannel.trySend(task).isSuccess) {
+                Log.e(TAG, "Could not enqueue ${task.fileName}: channel closed")
             }
         }
 
-        startProcessing()
+        if (tasksCopy.isEmpty()) {
+            // Nothing can ever complete, so report the (empty) completion right away;
+            // callers use it to show "awaiting confirmation" style states.
+            scope.launch { checkCompletion() }
+        }
     }
 
     private suspend fun processTask(task: ConversionTask, workerId: Int) {
         try {
             val taskNum = startedCount.incrementAndGet()
             val totalTasks = synchronized(tasks) { tasks.size }
-            
+
             Log.d(TAG, "Worker $workerId processing: ${task.fileName} -> ${task.outputFormat}")
 
             withContext(Dispatchers.Main) {
@@ -186,8 +211,8 @@ class ConversionQueue(
                 OutputFormat.DNG -> converter.convertToDNG(task.inputPath, task.outputPath)
                 OutputFormat.JPEG -> {
                     val result = converter.convertToJPEG(
-                        task.inputPath, 
-                        task.outputPath, 
+                        task.inputPath,
+                        task.outputPath,
                         jpegQuality,
                         jpegChroma,
                         jpegOptimize,
@@ -198,8 +223,8 @@ class ConversionQueue(
                     if (result.success) {
                         Log.d(TAG, "JPEG ${task.fileName}: ${if (usedEmbeddedJpeg) "embedded camera JPEG" else "rendered from sensor data"} ${result.width}x${result.height}")
                         // Backends that cannot author EXIF themselves leave it to us.
-                        if (!result.exifEmbedded) {
-                            ExifData.writeExifToJpeg(task.inputPath, task.outputPath, result.orientation)
+                        if (!result.exifEmbedded && !ExifData.writeExifToJpeg(task.inputPath, task.outputPath, result.orientation)) {
+                            Log.w(TAG, "Could not write EXIF metadata into ${task.fileName}; the JPEG is kept without it")
                         }
                         ""
                     } else {
@@ -209,7 +234,7 @@ class ConversionQueue(
             }
 
             completedCount.incrementAndGet()
-            
+
             val result = if (errorMessage.isEmpty()) {
                 successfulCount.incrementAndGet()
                 Log.d(TAG, "Worker $workerId success: ${task.fileName}")
@@ -223,7 +248,9 @@ class ConversionQueue(
             withContext(Dispatchers.Main) {
                 onTaskComplete(result)
             }
-
+        } catch (e: CancellationException) {
+            // The queue is being torn down; do not report a failure for a cancelled task.
+            throw e
         } catch (e: Exception) {
             completedCount.incrementAndGet()
             failedCount.incrementAndGet()
@@ -242,11 +269,13 @@ class ConversionQueue(
         completedCount.set(0)
         successfulCount.set(0)
         failedCount.set(0)
+        reportedCompletion.set(-1)
     }
 
     fun cancel() {
-        processingJob?.cancel()
+        isCancelled = true
         taskChannel.close()
+        processingJob?.cancel()
         scope.cancel()
         isProcessing = false
     }
